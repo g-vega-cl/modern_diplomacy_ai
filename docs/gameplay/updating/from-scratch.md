@@ -27,7 +27,7 @@ This document outlines the phased approach to migrate the existing React applica
     *   `@tanstack/react-router`: For type-safe routing.
     *   `@tanstack/react-table`: If tabular data display is a significant part of the application.
     ```bash
-    npm install @tanstack/react-query @tanstack/react-router @tanstack/react-table
+npm install @tanstack/react-query @tanstack/react-router @tanstack/react-table
     ```
 2.  **Integrate shadcn/ui:** Follow the official shadcn/ui installation guide. This typically involves:
     *   Installing Tailwind CSS and its peer dependencies.
