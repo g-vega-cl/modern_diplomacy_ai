@@ -1,36 +1,34 @@
-# TanStack Start - Basic Example
+# Game Design Documentation for Modern Diplomacy AI
 
-This is the basic TanStack Start example, demonstrating the fundamentals of building applications with TanStack Router and TanStack Start.
+## Overview
+This document outlines the complete game design for the Modern Diplomacy AI strategy board game.
 
-- [TanStack Router Docs](https://tanstack.com/router)
+## Game Concept
+The game is a strategy board game where players control different nations and engage in diplomacy, warfare, and alliances to achieve dominance.
 
-It's deployed automagically with Netlify!
+## Constraints
+- Each player can control only one nation.
+- Game duration is limited to 50 turns.
+- Players must adhere to international diplomacy rules.
 
-- [Netlify](https://netlify.com/)
+## Mechanics
+- Players take turns negotiating and submitting orders.
+- Alliances can be formed and broken at any time.
 
-## Start a new project based on this example
+### Troop Counts
+- Each nation starts with a fixed number of troops:
+    - Infantry: 10
+    - Cavalry: 5
+    - Artillery: 3
 
-To start a new project based on this example, run:
+### Combat Formulas
+- Combat is resolved using the following formula:
+  - For each troop type involved in a battle, roll a six-sided die (1d6).
+  - Combat results determine troop losses based on the number of troops engaged and the roll result.
 
-```sh
-npx gitpick TanStack/router/tree/main/examples/react/start-basic start-basic
-```
+### Turn Order Systems
+- Turn order is determined randomly at the start of the game and rotates clockwise.
+- Players must submit their orders before the end of each turn.
 
-## Getting Started
-
-From your terminal:
-
-```sh
-pnpm install
-pnpm dev
-```
-
-This starts your app in development mode, rebuilding assets on file changes.
-
-## Build
-
-To build the app for production:
-
-```sh
-pnpm build
-```
+## Conclusion
+This document serves as a comprehensive guide to the game's design, ensuring all players understand the mechanics and constraints involved in playing Modern Diplomacy AI.
