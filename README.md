@@ -480,4 +480,303 @@ Each faction has a unique **National Identity** — a passive bonus that reflect
 | eu_netherlands | Netherlands & Belgium | 1.0 | 1 | Trade Hub |
 | eu_poland | Poland | 0.8 | 1 | — |
 | eu_sweden | Sweden & Norway | 0.7 | 1 | Energy Self-Reliance |
-| eu_austria_czech | Austri
+| eu_austria_czech | Austria & Czech Rep. | 0.7 | 1 | — |
+| eu_denmark_finland | Denmark & Finland | 0.6 | 1 | — |
+| eu_portugal_greece | Portugal & Greece | 0.6 | 1 | — |
+| eu_romania_hungary | Romania & Hungary | 0.5 | 1 | — |
+| eu_baltics | Baltic States | 0.4 | 1 | — |
+| eu_ireland | Ireland | 0.5 | 1 | — |
+
+### 14.3 China (18 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| china_beijing | Beijing & Hebei | 1.2 | 1 | — |
+| china_shanghai | Shanghai & Jiangsu | 1.8 | 2 | Financial Hub |
+| china_guangdong | Guangdong (Pearl River) | 1.6 | 2 | Trade Hub |
+| china_zhejiang | Zhejiang & Fujian | 1.1 | 1 | — |
+| china_shandong | Shandong | 1.0 | 1 | — |
+| china_henan | Henan & Anhui | 0.9 | 1 | Agriculture |
+| china_hubei | Hubei & Hunan | 0.9 | 1 | — |
+| china_sichuan | Sichuan & Chongqing | 0.9 | 1 | — |
+| china_liaoning | Liaoning & Jilin | 0.8 | 1 | Industry |
+| china_heilong | Heilongjiang | 0.6 | 1 | — |
+| china_shanxi | Shanxi & Shaanxi | 0.7 | 1 | Energy Exporter |
+| china_yunnan | Yunnan & Guizhou | 0.6 | 1 | — |
+| china_guangxi | Guangxi | 0.5 | 1 | — |
+| china_inner_mongolia | Inner Mongolia | 0.5 | 1 | — |
+| china_xinjiang | Xinjiang | 0.4 | 1 | — |
+| china_tibet | Tibet | 0.2 | 1 | — |
+| china_gansu | Gansu & Qinghai | 0.3 | 1 | — |
+| china_hainan | Hainan & South China Sea | 0.5 | 1 | Naval Chokepoint |
+
+### 14.4 India (4 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| india_north | North India | 1.2 | 1 | Agriculture |
+| india_west | West India | 1.2 | 1 | Industry |
+| india_south | South India | 1.0 | 1 | Tech Hub |
+| india_east | East India | 0.8 | 1 | — |
+
+### 14.5 Japan (4 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| japan_kanto | Kanto (Tokyo Metro) | 1.5 | 2 | Financial Hub |
+| japan_kansai | Kansai (Osaka/Kyoto) | 1.2 | 1 | Industry |
+| japan_chubu | Chubu (Nagoya) | 1.0 | 1 | Industry |
+| japan_north_south | Hokkaido & Kyushu | 0.5 | 1 | — |
+
+### 14.6 United Kingdom (3 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| uk_london | England South (London) | 1.2 | 1 | Financial Hub |
+| uk_england_north | England North & Midlands | 1.0 | 1 | Industry |
+| uk_scotland | Scotland & Wales & NI | 0.8 | 1 | — |
+
+### 14.7 Russia (2 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| russia_west | Western Russia | 1.2 | 1 | Energy Exporter |
+| russia_siberia | Siberia & Far East | 0.8 | 1 | Energy Self-Reliance |
+
+### 14.8 Brazil (2 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| brazil_se | Southeast Brazil | 1.2 | 1 | Agriculture |
+| brazil_north | North & Northeast Brazil | 0.8 | 1 | — |
+
+### 14.9 South Korea (2 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| skorea_seoul | Seoul Capital Region | 1.2 | 1 | Tech Hub |
+| skorea_south | Southern Korea | 0.8 | 1 | Industry |
+
+### 14.10 Neutral Regions (~27 Regions)
+
+| ID | Region Name | GDP ($T) | Base Troops | Trait |
+|---|---|---|---|---|
+| canada_west | Canada West | 1.0 | 1 | Energy Self-Reliance |
+| canada_east | Canada East | 1.0 | 1 | — |
+| mexico_north | Mexico North | 0.8 | 1 | — |
+| mexico_south | Mexico South | 0.7 | 1 | — |
+| central_america | Central America & Caribbean | 0.5 | 1 | — |
+| colombia_venezuela | Colombia & Venezuela | 0.5 | 1 | Energy Exporter |
+| andean | Andean States | 0.4 | 1 | — |
+| southern_cone | Southern Cone | 0.8 | 1 | Agriculture |
+| australia_east | Australia East | 0.9 | 1 | — |
+| australia_west | Australia West | 0.6 | 1 | Energy Self-Reliance |
+| saudi_arabia | Saudi Arabia | 1.0 | 1 | Energy Exporter |
+| uae_gulf | UAE & Gulf States | 0.8 | 1 | Energy Exporter |
+| iran | Iran | 0.5 | 1 | Strait of Hormuz |
+| turkey | Turkey | 1.0 | 1 | Strategic Chokepoint |
+| indonesia | Indonesia | 1.0 | 1 | Naval Chokepoint |
+| thailand_vietnam | Thailand & Vietnam | 0.8 | 1 | — |
+| philippines_malaysia | Philippines & Malaysia | 0.7 | 1 | — |
+| pakistan_afghan | Pakistan & Afghanistan | 0.4 | 1 | — |
+| nigeria | Nigeria | 0.5 | 1 | Energy Exporter |
+| south_africa | South Africa | 0.4 | 1 | — |
+| egypt | Egypt | 0.4 | 1 | Suez Canal |
+| east_africa | East Africa | 0.4 | 1 | — |
+| central_africa | Central Africa | 0.3 | 1 | — |
+| west_africa | West Africa (ex-Nigeria) | 0.5 | 1 | — |
+| north_africa | North Africa | 0.4 | 1 | — |
+| levant | Israel & Levant | 0.5 | 1 | — |
+| iraq_kuwait | Iraq & Kuwait | 0.3 | 1 | Energy Exporter |
+| central_asia | Kazakhstan & Central Asia | 0.4 | 1 | — |
+| taiwan | Taiwan | 0.7 | 1 | Tech Hub |
+
+---
+
+## 15. Adjacency Map
+
+Each region can only be attacked or moved into from an adjacent region. The following lists each region's neighbors. Overseas/island adjacencies require a Naval Base unless otherwise noted.
+
+### USA
+| Region | Adjacent To |
+|---|---|
+| Pacific Coast North | Pacific Coast South, Mountain West, Canada West |
+| Pacific Coast South | Pacific Coast North, California Central, Mountain West |
+| California Central | Pacific Coast South, California South, Mountain West, Southwest |
+| California South | California Central, Southwest |
+| Mountain West | Pacific Coast North, Pacific Coast South, California Central, Southwest, Great Plains South, Great Plains North |
+| Southwest | California South, Mountain West, Texas North, Mexico North |
+| Texas North | Southwest, Texas South, Great Plains South, Mid-South |
+| Texas South | Texas North, Deep South, Mexico North |
+| Great Plains North | Mountain West, Great Plains South, Great Lakes, Canada East |
+| Great Plains South | Mountain West, Great Plains North, Texas North, Mid-South, Midwest Industrial |
+| Midwest Industrial | Great Lakes, Great Plains South, Mid-South, Appalachia, Pennsylvania |
+| Great Lakes | Great Plains North, Midwest Industrial, New York State, Canada East |
+| Mid-South | Great Plains South, Texas North, Deep South, Appalachia, Midwest Industrial |
+| Deep South | Texas South, Mid-South, Southeast |
+| Southeast | Deep South, Florida, Appalachia, Mid-Atlantic South |
+| Florida | Southeast, Central America & Caribbean *(naval)* |
+| Appalachia | Midwest Industrial, Mid-South, Southeast, Mid-Atlantic South, Appalachian Energy Belt |
+| Mid-Atlantic South | Appalachia, Southeast, Mid-Atlantic North, Pennsylvania |
+| Mid-Atlantic North | Mid-Atlantic South, Pennsylvania, New York City |
+| Pennsylvania | Midwest Industrial, Mid-Atlantic South, Mid-Atlantic North, New York City |
+| New York City | Mid-Atlantic North, New York State, New England South |
+| New York State | Great Lakes, New York City, New England North, New England South |
+| New England North | New York State, New England South, Canada East |
+| New England South | New York City, New York State, New England North |
+| Alaska | Canada West, Siberia & Far East *(naval)* |
+| Hawaii | *(Island — requires Naval Base for access)* |
+| Puerto Rico & Territories | Central America & Caribbean *(naval)* |
+| Appalachian Energy Belt | Appalachia, Mid-Atlantic South |
+
+### European Union
+| Region | Adjacent To |
+|---|---|
+| Germany West & Ruhr | Germany North, Germany East & South, France North, Netherlands & Belgium |
+| Germany East & South | Germany West & Ruhr, Germany North, Austria & Czech Rep., Poland, France North |
+| Germany North | Germany West & Ruhr, Germany East & South, Netherlands & Belgium, Denmark & Finland, Sweden & Norway |
+| France North | Germany West & Ruhr, Germany East & South, France South, Netherlands & Belgium, England South *(naval)*, Iberian North |
+| France South | France North, Italy North, Iberian North |
+| Italy North | France South, Austria & Czech Rep., Italy South |
+| Italy South | Italy North, Portugal & Greece, North Africa *(naval)* |
+| Iberian North | France North, France South, Iberian South |
+| Iberian South | Iberian North, Portugal & Greece, North Africa *(naval)* |
+| Netherlands & Belgium | Germany West & Ruhr, Germany North, France North, England South *(naval)* |
+| Poland | Germany East & South, Austria & Czech Rep., Romania & Hungary, Baltic States, Western Russia |
+| Sweden & Norway | Germany North, Denmark & Finland, Baltic States |
+| Austria & Czech Rep. | Germany East & South, Italy North, Poland, Romania & Hungary |
+| Denmark & Finland | Germany North, Sweden & Norway, Baltic States |
+| Portugal & Greece | Iberian South, Italy South, Romania & Hungary, Turkey, Israel & Levant *(naval)* |
+| Romania & Hungary | Austria & Czech Rep., Poland, Portugal & Greece, Baltic States, Western Russia |
+| Baltic States | Poland, Sweden & Norway, Denmark & Finland, Romania & Hungary, Western Russia |
+| Ireland | Scotland & Wales & NI, England South *(naval)* |
+
+### United Kingdom
+| Region | Adjacent To |
+|---|---|
+| England South (London) | England North & Midlands, France North *(naval)*, Netherlands & Belgium *(naval)*, Ireland *(naval)* |
+| England North & Midlands | England South, Scotland & Wales & NI |
+| Scotland & Wales & NI | England North & Midlands, Ireland *(naval)* |
+
+### Russia
+| Region | Adjacent To |
+|---|---|
+| Western Russia | Poland, Baltic States, Romania & Hungary, Siberia & Far East, Kazakhstan & Central Asia, Turkey |
+| Siberia & Far East | Western Russia, Alaska *(naval)*, Heilongjiang, Inner Mongolia, Kazakhstan & Central Asia |
+
+### China
+| Region | Adjacent To |
+|---|---|
+| Beijing & Hebei | Liaoning & Jilin, Shandong, Inner Mongolia, Shanxi & Shaanxi |
+| Shanghai & Jiangsu | Shandong, Zhejiang & Fujian, Henan & Anhui |
+| Guangdong (Pearl River) | Zhejiang & Fujian, Guangxi, Hubei & Hunan, Taiwan *(naval)*, Thailand & Vietnam |
+| Zhejiang & Fujian | Shanghai & Jiangsu, Guangdong, Taiwan *(naval)* |
+| Shandong | Beijing & Hebei, Shanghai & Jiangsu, Henan & Anhui, Liaoning & Jilin |
+| Henan & Anhui | Shandong, Shanghai & Jiangsu, Hubei & Hunan, Shanxi & Shaanxi |
+| Hubei & Hunan | Henan & Anhui, Sichuan & Chongqing, Guangdong, Guangxi, Yunnan & Guizhou |
+| Sichuan & Chongqing | Hubei & Hunan, Yunnan & Guizhou, Gansu & Qinghai, Tibet |
+| Liaoning & Jilin | Beijing & Hebei, Shandong, Heilongjiang, Seoul Capital Region |
+| Heilongjiang | Liaoning & Jilin, Inner Mongolia, Siberia & Far East |
+| Shanxi & Shaanxi | Beijing & Hebei, Henan & Anhui, Inner Mongolia, Gansu & Qinghai |
+| Yunnan & Guizhou | Hubei & Hunan, Sichuan & Chongqing, Guangxi, Thailand & Vietnam, East India |
+| Guangxi | Guangdong, Hubei & Hunan, Yunnan & Guizhou, Thailand & Vietnam |
+| Inner Mongolia | Beijing & Hebei, Heilongjiang, Shanxi & Shaanxi, Gansu & Qinghai, Siberia & Far East |
+| Xinjiang | Tibet, Gansu & Qinghai, Kazakhstan & Central Asia, Pakistan & Afghanistan |
+| Tibet | Xinjiang, Sichuan & Chongqing, Yunnan & Guizhou, Gansu & Qinghai, North India, East India, Pakistan & Afghanistan |
+| Gansu & Qinghai | Shanxi & Shaanxi, Sichuan & Chongqing, Tibet, Xinjiang, Inner Mongolia |
+| Hainan & South China Sea | Guangdong *(naval)*, Indonesia *(naval)*, Philippines & Malaysia *(naval)* |
+
+### India
+| Region | Adjacent To |
+|---|---|
+| North India | West India, East India, Tibet, Pakistan & Afghanistan |
+| West India | North India, South India, Pakistan & Afghanistan |
+| South India | West India, East India |
+| East India | North India, South India, Tibet, Yunnan & Guizhou |
+
+### Japan
+| Region | Adjacent To |
+|---|---|
+| Kanto (Tokyo Metro) | Kansai, Chubu, Seoul Capital Region *(naval)* |
+| Kansai (Osaka/Kyoto) | Kanto, Chubu, Hokkaido & Kyushu |
+| Chubu (Nagoya) | Kanto, Kansai |
+| Hokkaido & Kyushu | Kansai, Siberia & Far East *(naval)* |
+
+### South Korea
+| Region | Adjacent To |
+|---|---|
+| Seoul Capital Region | Southern Korea, Liaoning & Jilin *(naval)*, Kanto *(naval)* |
+| Southern Korea | Seoul Capital Region, Kansai *(naval)* |
+
+### Brazil
+| Region | Adjacent To |
+|---|---|
+| Southeast Brazil | North & Northeast Brazil, Southern Cone, Andean States |
+| North & Northeast Brazil | Southeast Brazil, Colombia & Venezuela, Andean States, Central America *(naval)* |
+
+### Neutral Regions
+| Region | Adjacent To |
+|---|---|
+| Canada West | Canada East, Pacific Coast North, Great Plains North, Alaska |
+| Canada East | Canada West, Great Plains North, Great Lakes, New England North |
+| Mexico North | Southwest, Texas South, Mexico South |
+| Mexico South | Mexico North, Central America & Caribbean |
+| Central America & Caribbean | Mexico South, Florida *(naval)*, Puerto Rico *(naval)*, Colombia & Venezuela, North & Northeast Brazil *(naval)* |
+| Colombia & Venezuela | Central America & Caribbean, Andean States, North & Northeast Brazil |
+| Andean States | Colombia & Venezuela, Southeast Brazil, North & Northeast Brazil, Southern Cone |
+| Southern Cone | Andean States, Southeast Brazil |
+| Australia East | Australia West, Indonesia *(naval)* |
+| Australia West | Australia East, Indonesia *(naval)* |
+| Saudi Arabia | UAE & Gulf States, Iran, Iraq & Kuwait, Egypt, Israel & Levant |
+| UAE & Gulf States | Saudi Arabia, Iran |
+| Iran | Turkey, Iraq & Kuwait, Saudi Arabia, UAE & Gulf States, Kazakhstan & Central Asia, Pakistan & Afghanistan |
+| Turkey | Portugal & Greece, Romania & Hungary, Western Russia, Iran, Israel & Levant, Egypt |
+| Indonesia | Australia East *(naval)*, Australia West *(naval)*, Hainan & South China Sea *(naval)*, Philippines & Malaysia, Thailand & Vietnam |
+| Thailand & Vietnam | Yunnan & Guizhou, Guangxi, Guangdong, Indonesia, Philippines & Malaysia, East India |
+| Philippines & Malaysia | Hainan & South China Sea, Indonesia, Thailand & Vietnam, Taiwan *(naval)* |
+| Pakistan & Afghanistan | North India, West India, Tibet, Xinjiang, Iran, Kazakhstan & Central Asia |
+| Nigeria | West Africa, Central Africa, North Africa |
+| South Africa | Central Africa, East Africa |
+| Egypt | North Africa, Israel & Levant, Saudi Arabia, Turkey |
+| East Africa | North Africa, Central Africa, South Africa, Israel & Levant *(naval)* |
+| Central Africa | West Africa, Nigeria, North Africa, East Africa, South Africa |
+| West Africa (ex-Nigeria) | North Africa, Nigeria, Central Africa |
+| North Africa | Iberian South *(naval)*, Italy South *(naval)*, Egypt, West Africa, Nigeria, Central Africa |
+| Israel & Levant | Turkey, Iraq & Kuwait, Saudi Arabia, Egypt, Portugal & Greece *(naval)*, East Africa *(naval)* |
+| Iraq & Kuwait | Turkey, Iran, Saudi Arabia, Israel & Levant |
+| Kazakhstan & Central Asia | Western Russia, Siberia & Far East, Xinjiang, Inner Mongolia, Iran, Pakistan & Afghanistan |
+| Taiwan | Zhejiang & Fujian *(naval)*, Guangdong *(naval)*, Kanto *(naval)*, Philippines & Malaysia *(naval)* |
+
+> **Note:** *(naval)* indicates the connection requires a Naval Base or counts as a naval crossing. Without a Naval Base trait in an adjacent owned region, crossing naval routes costs +1 move.
+
+---
+
+## 16. TODOs & Open Questions
+
+The following items are pending design decisions and must be resolved before the game is production-ready.
+
+### High Priority
+- [ ] **National Identity Bonuses** — Define bonuses for USA, EU, China, India, Japan, UK, Brazil, South Korea (Section 13)
+- [ ] **Turn Yes/No Choices** — Define the full deck of yes/no event cards presented each turn (Section 8.5)
+- [ ] **Population Stockpile Debuff Thresholds** — Define penalties at % thresholds of remaining stockpile (Section 7.6)
+- [ ] **Tech Hub Trait** — Define mechanical bonus
+- [ ] **Industry Trait** — Define mechanical bonus
+- [ ] **Trade Hub Trait** — Define mechanical bonus
+- [ ] **Agriculture Trait** — Define mechanical bonus
+
+### Medium Priority
+- [ ] **Economic Trade Mechanics** — How do Energy Exporter regions actually trade with allies? Define the GDP sharing mechanic
+- [ ] **Turn Order Modifiers** — Which bonuses or events can affect turn order probability?
+- [ ] **Resistance Event Types** — Define a list of Storyteller-triggered resistance events during occupation (Section 11.3)
+- [ ] **Diplomacy Trade Deals** — Define the mechanics for GDP or resource sharing between player factions
+
+### Low Priority / Design Polish
+- [ ] **Neutral Faction Personalities** — Give each major neutral region (Canada, Turkey, Saudi Arabia, Taiwan, etc.) a personality brief for the Storyteller
+- [ ] **Event Card Deck** — Design the full set of yes/no turn choices as a physical or digital card deck
+- [ ] **Elimination Rules** — Clarify what happens to a fully eliminated player's regions (do they revert to neutral? Stay captured?)
+- [ ] **Simultaneous Win Tiebreaker** — Flesh out tiebreaker rules beyond "higher GDP wins"
+- [ ] **Map Visual** — Commission a proper visual board map based on the region definitions in Section 14 (reference: game-map.html prototype)
+
+---
+
+*End of Document — World Dominion v0.2*
