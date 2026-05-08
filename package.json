@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "start": "node .output/server/index.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "play": "npx tsx src/cli/index.ts"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.166.8",
