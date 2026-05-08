@@ -1,4 +1,4 @@
-import { GameState, Player, Unit, ResolutionResult } from "../engine/types";
+import { GameState, Player, Unit, ResolutionResult, Placement } from "../engine/types";
 
 const SEP = "═".repeat(56);
 const BAR = "─".repeat(56);
@@ -11,6 +11,7 @@ export function showHeader(state: GameState): void {
 
 function phaseLabel(p: string): string {
   const labels: Record<string, string> = {
+    PLACEMENT: "PLACEMENT",
     ORDER: "ORDER",
     RESOLUTION: "RESOLUTION",
     RETREAT: "RETREAT",
@@ -107,6 +108,29 @@ function getValidMovesDisplay(unit: Unit, state: GameState): string {
     moves.push(`${nId} (${name})`);
   }
   return moves.length > 0 ? moves.join(", ") : "—";
+}
+
+export function showPlacementPrompt(
+  player: Player,
+  validPlacements: readonly Placement[],
+  placedCount: number,
+  totalNeeded: number,
+): void {
+  const remaining = totalNeeded - placedCount;
+  console.log(`  ▶ ${capitalize(player.id)} — place ${remaining} unit(s) (${placedCount}/${totalNeeded} done)`);
+  console.log();
+  const byLocation = new Map<string, string[]>();
+  for (const p of validPlacements) {
+    const existing = byLocation.get(p.locationId) || [];
+    existing.push(p.type);
+    byLocation.set(p.locationId, existing);
+  }
+  for (const [loc, types] of byLocation) {
+    console.log(`    ${loc.padEnd(8)} — ${types.join(" or ")}`);
+  }
+  console.log();
+  console.log(`  Enter: "A {home}" for army, "F {home}" for fleet, e.g. "A PAR"`);
+  console.log();
 }
 
 export function showResolutionResult(result: ResolutionResult): void {

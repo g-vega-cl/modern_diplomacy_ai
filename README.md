@@ -9,13 +9,13 @@ TypeScript game engine and strategy board game project.
 
 ## Diplomacy Light Engine
 
-A deterministic, simultaneous-move game engine implementing a simplified version of the classic Diplomacy board game. Pure TypeScript, zero dependencies, 79 tests.
+A deterministic, simultaneous-move game engine implementing a simplified version of the classic Diplomacy board game. Pure TypeScript, zero dependencies, 80 tests.
 
 ### Quick Start
 
 ```bash
 pnpm install
-pnpm test          # Run all 79 tests
+pnpm test          # Run all 80 tests
 pnpm play          # Play interactively in the terminal
 ```
 
@@ -43,7 +43,16 @@ During the **placement phase**, players may customize unit types and positions o
 pnpm play
 ```
 
-Players take turns entering orders in sequence. All orders are resolved simultaneously per standard Diplomacy rules.
+**Placement Phase:** Each power places their 3 units on their home supply centers, choosing army or fleet per center.
+
+```
+A PAR    — Place army in Paris
+F BRE    — Place fleet in Brest
+```
+
+Coastal home SCs accept fleets or armies; inland home SCs are army-only. After all 7 powers place their units, the ORDER phase begins.
+
+**Order Phase:** Players take turns entering orders in sequence. All orders are resolved simultaneously per standard Diplomacy rules.
 
 **Order syntax:**
 
@@ -88,7 +97,7 @@ src/cli/
   display.ts        — Terminal rendering
   parser.ts         — Text order parser
 
-src/engine/__tests__/  — 79 tests across 7 files
+src/engine/__tests__/  — 80 tests across 7 files
 ```
 
 ### API Usage
@@ -164,7 +173,7 @@ All standard mechanics implemented: simultaneous resolution, support/hold/move, 
 ### Development
 
 ```bash
-pnpm test          # 79 tests
+pnpm test          # 80 tests
 pnpm test:watch    # Watch mode
 pnpm play          # Terminal CLI
 pnpm build         # TypeScript check

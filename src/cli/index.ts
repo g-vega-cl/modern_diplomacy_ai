@@ -3,13 +3,13 @@ import { stdin as input, stdout as output } from "node:process";
 import { DiplomacyEngine } from "../engine/engine";
 import { GameStateMachine } from "../engine/state-machine";
 import { VictoryChecker } from "../engine/victory";
-import { Phase, Order, UnitType } from "../engine/types";
-import { STARTING_UNITS } from "../engine/config";
+import { Phase, Order, UnitType, Placement } from "../engine/types";
+import { GAME_CONFIG } from "../engine/config";
 import { parseOrder } from "./parser";
 import {
   showHeader, showSupplyCenters, showUnits, showPlayerOrdersPrompt,
   showResolutionResult, showHelp, showRetreatPrompt, showBuildPrompt,
-  showVictory, showMessage,
+  showVictory, showMessage, showPlacementPrompt,
 } from "./display";
 
 class InputSource {
@@ -63,14 +63,7 @@ function clearScreen(): void {
 async function main() {
   clearScreen();
   const engine = new DiplomacyEngine();
-  let state = engine.createGame(
-    Object.fromEntries(
-      Object.entries(STARTING_UNITS).map(([playerId, units]) => [
-        playerId,
-        units.map(u => ({ type: u.type as UnitType, locationId: u.locationId })),
-      ])
-    )
-  );
+  let state = engine.createGame();
 
   while (true) {
     clearScreen();
@@ -293,6 +286,56 @@ async function main() {
       }
 
       state = GameStateMachine.advancePhase(nextState);
+    } else if (state.phase === Phase.PLACEMENT) {
+      for (const player of state.players.values()) {
+        const validPlacements = engine.getValidPlacements(state, player.id);
+        if (validPlacements.length === 0) continue;
+
+        let nextState = { ...state };
+        const placements: Placement[] = [];
+        const needed = GAME_CONFIG.INITIAL_UNITS_PER_PLAYER - player.units.size;
+
+        while (placements.length < needed) {
+          clearScreen();
+          showHeader(nextState);
+          showUnits(nextState);
+          showPlacementPrompt(player, validPlacements, placements.length, GAME_CONFIG.INITIAL_UNITS_PER_PLAYER);
+
+          const line = await ask();
+          if (line.toLowerCase() === "quit" || line.toLowerCase() === "q") {
+            console.log("Goodbye!");
+            process.exit(0);
+          }
+          if (!line) continue;
+
+          const tokens = line.toUpperCase().split(/\s+/);
+          if (tokens.length < 2 || (tokens[0] !== "A" && tokens[0] !== "F")) {
+            showMessage(`Format: A {home} or F {home}, e.g. "A PAR"`);
+            continue;
+          }
+          const t = tokens[0] === "A" ? UnitType.ARMY : UnitType.FLEET;
+          const locId = tokens[1];
+
+          const valid = validPlacements.some(
+            p => p.type === t && p.locationId === locId && !placements.some(q => q.locationId === locId)
+          );
+          if (!valid) {
+            showMessage(`Invalid or duplicate placement. Check the options above.`);
+            continue;
+          }
+
+          placements.push({ type: t, locationId: locId });
+          showMessage(`Placed ${tokens[0]} in ${locId}`);
+          await ask(); // pause to let player read
+        }
+
+        state = engine.submitPlacements(nextState, player.id, placements);
+        if (engine.isPlacementComplete(state)) break;
+      }
+
+      if (engine.isPlacementComplete(state)) {
+        state = GameStateMachine.advancePhase(state);
+      }
     } else {
       state = GameStateMachine.advancePhase(state);
     }

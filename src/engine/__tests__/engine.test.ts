@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { DiplomacyEngine } from "../engine";
 import { Phase, UnitType } from "../types";
-import { STARTING_UNITS } from "../config";
+import { STARTING_UNITS, PLAYERS, HOME_SCS } from "../config";
+import { GameStateMachine } from "../state-machine";
 
 function standardPlacements(): Record<string, Array<{ type: UnitType; locationId: string }>> {
   const result: Record<string, Array<{ type: UnitType; locationId: string }>> = {};
@@ -72,8 +73,40 @@ describe("DiplomacyEngine", () => {
 
     it("isPlacementComplete returns true when all players have 3 units", () => {
       const engine = new DiplomacyEngine();
-      const state = engine.createGame(standardPlacements());
+      let state = engine.createGame();
+      for (const playerId of PLAYERS) {
+        const homeSCs = HOME_SCS[playerId] || [];
+        const placements = homeSCs.slice(0, 3).map((scId, i) => ({
+          type: i === 0 ? UnitType.FLEET : UnitType.ARMY,
+          locationId: scId,
+        }));
+        state = engine.submitPlacements(state, playerId, placements);
+      }
       expect(engine.isPlacementComplete(state)).toBe(true);
+    });
+
+    it("full placement flow: all players place then advance to ORDER", () => {
+      const engine = new DiplomacyEngine();
+      let state = engine.createGame();
+      expect(state.phase).toBe(Phase.PLACEMENT);
+
+      for (const playerId of PLAYERS) {
+        const scs = HOME_SCS[playerId] || [];
+        const placements = scs.slice(0, 3).map((scId, i) => ({
+          type: (i === 0 && scs.length > 1) ? UnitType.FLEET : UnitType.ARMY,
+          locationId: scId,
+        }));
+        expect(placements.length).toBe(3);
+        state = engine.submitPlacements(state, playerId, placements);
+      }
+
+      expect(engine.isPlacementComplete(state)).toBe(true);
+      expect(state.units.size).toBe(21);
+
+      state = GameStateMachine.advancePhase(state);
+      expect(state.phase).toBe(Phase.ORDER);
+      expect(state.year).toBe(1901);
+      expect(state.season).toBe("SPRING");
     });
 
     it("getValidPlacements respects occupied home SCs", () => {
