@@ -12,7 +12,6 @@ export class MovementValidator {
     if (!adjacent) return false;
 
     if (unit.type === UnitType.ARMY) {
-      if (to.type === ProvinceType.SEA) return false;
       return true;
     }
 

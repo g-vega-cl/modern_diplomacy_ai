@@ -101,8 +101,8 @@ function getValidMovesDisplay(unit: Unit, state: GameState): string {
   for (const nId of from.neighbors) {
     const n = state.provinces.get(nId);
     if (!n) continue;
-    if (unit.type === "A" as any && n.type === "SEA" as any) continue;
     if (unit.type === "F" as any && n.type === "LAND" as any && !n.landConnection) continue;
+    if (unit.type === "F" as any && n.type === ("COAST" as any) && ["SPA", "STP", "BUL"].includes(nId)) continue;
     const name = n.name.length > 15 ? n.name.slice(0, 15) + "…" : n.name;
     moves.push(`${nId} (${name})`);
   }

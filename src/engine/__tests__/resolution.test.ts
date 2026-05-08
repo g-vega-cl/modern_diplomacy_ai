@@ -147,6 +147,71 @@ describe("ResolutionEngine", () => {
       const result = ResolutionEngine.resolve(state);
       expect(result.successfulMoves).toContainEqual({ unitId: "A_ENG", fromLocationId: "ENG", toLocationId: "LON" });
     });
+
+    it("army in sea cannot support a move (§8.1)", () => {
+      const state = createTestState(
+        ["ENG", "LON", "YOR"],
+        [A("A_LON", "england", "LON"), A("A_ENG", "france", "ENG"), A("A_YOR", "france", "YOR")],
+        [HOLD("A_LON"), SUP("A_ENG", "A_YOR", "LON"), MOVE("A_YOR", "LON")],
+      );
+      const result = ResolutionEngine.resolve(state);
+      expect(result.bouncedMoves).toContainEqual({ unitId: "A_YOR", attemptedLocationId: "LON" });
+    });
+
+    it("army in sea cannot support a hold (§8.1)", () => {
+      const state = createTestState(
+        ["ENG", "LON", "YOR"],
+        [A("A_LON", "england", "LON"), A("A_ENG", "france", "ENG"), A("A_YOR", "france", "YOR")],
+        [HOLD("A_LON"), SUP("A_ENG", "A_LON"), MOVE("A_YOR", "LON")],
+      );
+      const result = ResolutionEngine.resolve(state);
+      expect(result.bouncedMoves).toContainEqual({ unitId: "A_YOR", attemptedLocationId: "LON" });
+    });
+
+    it("fleet defeats army when both move into same sea (§8.2)", () => {
+      const state = createTestState(
+        ["ENG", "NTH", "LON"],
+        [A("A_LON", "england", "LON"), F("F_NTH", "england", "NTH")],
+        [MOVE("A_LON", "ENG"), MOVE("F_NTH", "ENG")],
+      );
+      const result = ResolutionEngine.resolve(state);
+      expect(result.bouncedMoves).toContainEqual({ unitId: "A_LON", attemptedLocationId: "ENG" });
+      expect(result.successfulMoves).toContainEqual({ unitId: "F_NTH", fromLocationId: "NTH", toLocationId: "ENG" });
+    });
+
+    it("army landing blocked by incoming competing move (§8.3)", () => {
+      const state = createTestState(
+        ["ENG", "LON", "WAL"],
+        [A("A_ENG", "france", "ENG"), A("A_WAL", "england", "WAL")],
+        [MOVE("A_ENG", "LON"), MOVE("A_WAL", "LON")],
+      );
+      const result = ResolutionEngine.resolve(state);
+      expect(result.bouncedMoves).toContainEqual({ unitId: "A_ENG", attemptedLocationId: "LON" });
+    });
+
+    it("army moves to adjacent empty sea (§8.1)", () => {
+      const state = createTestState(
+        ["LON", "ENG"],
+        [A("A_LON", "england", "LON")],
+        [MOVE("A_LON", "ENG")],
+      );
+      const result = ResolutionEngine.resolve(state);
+      expect(result.successfulMoves).toContainEqual({ unitId: "A_LON", fromLocationId: "LON", toLocationId: "ENG" });
+    });
+
+    it("fleet tie vs army in sea: army dislodged, fleets bounce", () => {
+      const state = createTestState(
+        ["ENG", "NTH", "WAL"],
+        [A("A_ENG", "france", "ENG"), F("F_NTH", "england", "NTH"), F("F_WAL", "england", "WAL")],
+        [HOLD("A_ENG"), MOVE("F_NTH", "ENG"), MOVE("F_WAL", "ENG")],
+      );
+      const result = ResolutionEngine.resolve(state);
+      expect(result.dislodgedUnits).toContainEqual(
+        expect.objectContaining({ unitId: "A_ENG" }),
+      );
+      expect(result.successfulMoves.length).toBe(0);
+      expect(result.bouncedMoves.length).toBe(2);
+    });
   });
 
   describe("Complex Interactions", () => {

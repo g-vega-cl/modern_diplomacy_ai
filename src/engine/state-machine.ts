@@ -7,7 +7,9 @@ export class GameStateMachine {
       orders: new Map() as ReadonlyMap<string, import("./types").Order>,
     };
 
-    if (state.phase === Phase.ORDER) {
+    if (state.phase === Phase.PLACEMENT) {
+      next.phase = Phase.ORDER;
+    } else if (state.phase === Phase.ORDER) {
       next.phase = Phase.RESOLUTION;
     } else if (state.phase === Phase.RESOLUTION) {
       if (state.retreatsNeeded.length > 0) {

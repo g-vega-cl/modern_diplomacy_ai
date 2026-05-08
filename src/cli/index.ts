@@ -4,6 +4,7 @@ import { DiplomacyEngine } from "../engine/engine";
 import { GameStateMachine } from "../engine/state-machine";
 import { VictoryChecker } from "../engine/victory";
 import { Phase, Order, UnitType } from "../engine/types";
+import { STARTING_UNITS } from "../engine/config";
 import { parseOrder } from "./parser";
 import {
   showHeader, showSupplyCenters, showUnits, showPlayerOrdersPrompt,
@@ -62,7 +63,14 @@ function clearScreen(): void {
 async function main() {
   clearScreen();
   const engine = new DiplomacyEngine();
-  let state = engine.createGame();
+  let state = engine.createGame(
+    Object.fromEntries(
+      Object.entries(STARTING_UNITS).map(([playerId, units]) => [
+        playerId,
+        units.map(u => ({ type: u.type as UnitType, locationId: u.locationId })),
+      ])
+    )
+  );
 
   while (true) {
     clearScreen();
@@ -303,7 +311,8 @@ function calculateRetreatOptions(
   for (const nId of from.neighbors) {
     const n = state.provinces.get(nId);
     if (!n) continue;
-    if (unit.type === "A" && n.type === "SEA") continue;
+    if (unit.type === "F" && n.type === "LAND" && !n.landConnection) continue;
+    if (unit.type === "F" && n.type === "COAST" && ["SPA", "STP", "BUL"].includes(nId)) continue;
     const occupied = [...state.units.values()].some((u: any) => u.locationId === nId);
     if (occupied) continue;
     options.push(nId);

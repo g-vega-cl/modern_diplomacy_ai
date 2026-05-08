@@ -13,6 +13,13 @@ function emptyState(overrides: Partial<GameState> = {}): GameState {
 }
 
 describe("GameStateMachine", () => {
+  it("transitions PLACEMENT → ORDER", () => {
+    const next = GameStateMachine.advancePhase(emptyState({ phase: Phase.PLACEMENT }));
+    expect(next.phase).toBe(Phase.ORDER);
+    expect(next.season).toBe("SPRING");
+    expect(next.year).toBe(1901);
+  });
+
   it("transitions ORDER → RESOLUTION", () => {
     const next = GameStateMachine.advancePhase(emptyState());
     expect(next.phase).toBe(Phase.RESOLUTION);

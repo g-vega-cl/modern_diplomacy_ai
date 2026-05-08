@@ -28,8 +28,13 @@ describe("MovementValidator", () => {
     expect(MovementValidator.isValidMove(addUnit("A_PAR", UnitType.ARMY, "PAR", "france"), "PAR", "MUN", state)).toBe(false);
   });
 
-  it("rejects army move to sea province", () => {
-    expect(MovementValidator.isValidMove(addUnit("A_PAR", UnitType.ARMY, "PAR", "france"), "PAR", "ENG", state)).toBe(false);
+  it("allows army to move to adjacent sea province", () => {
+    expect(MovementValidator.isValidMove(addUnit("A_BRE", UnitType.ARMY, "BRE", "france"), "BRE", "ENG", state)).toBe(true);
+  });
+
+  it("allows army in coast to move to adjacent sea", () => {
+    expect(MovementValidator.isValidMove(addUnit("A_LVP", UnitType.ARMY, "LVP", "england"), "LVP", "IRI", state)).toBe(true);
+    expect(MovementValidator.isValidMove(addUnit("A_BRE", UnitType.ARMY, "BRE", "france"), "BRE", "ENG", state)).toBe(true);
   });
 
   it("rejects fleet move to landlocked province", () => {
@@ -66,7 +71,15 @@ describe("MovementValidator", () => {
     expect(moves).toContain("BRE");
     expect(moves).toContain("PIC");
     expect(moves).toContain("GAS");
-    expect(moves).not.toContain("ENG");
     expect(moves).not.toContain("MUN");
+  });
+
+  it("getValidMoves includes sea neighbors for army in coastal province", () => {
+    const moves = MovementValidator.getValidMoves(addUnit("A_LVP", UnitType.ARMY, "LVP", "england"), state);
+    expect(moves).toContain("CLY");
+    expect(moves).toContain("EDI");
+    expect(moves).toContain("YOR");
+    expect(moves).toContain("WAL");
+    expect(moves).toContain("IRI");
   });
 });

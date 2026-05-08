@@ -1,4 +1,4 @@
-import { GameState, Phase, Order, Unit, UnitType, BuildOrder, Player } from "./types";
+import { GameState, Phase, Order, Unit, UnitType, BuildOrder, Player, Placement } from "./types";
 import { GAME_CONFIG, PLAYERS, HOME_SCS, STARTING_UNITS } from "./config";
 import { createProvinces } from "./provinces";
 import { VictoryChecker } from "./victory";
@@ -7,35 +7,59 @@ import { SupplyCenterManager } from "./supply";
 import { ResolutionEngine } from "./resolution";
 
 export class DiplomacyEngine {
-  createGame(): GameState {
+  createGame(initialPlacements?: Record<string, Placement[]>): GameState {
     const provinces = createProvinces();
     const players = new Map<string, Player>();
     const allUnits = new Map<string, Unit>();
     const orders = new Map<string, Order>();
 
-    for (const playerId of PLAYERS) {
-      const unitMap = new Map<string, Unit>();
-      const starting = STARTING_UNITS[playerId] || [];
+    if (initialPlacements) {
+      for (const playerId of PLAYERS) {
+        const unitMap = new Map<string, Unit>();
+        const placements = initialPlacements[playerId] || [];
 
-      for (let i = 0; i < starting.length; i++) {
-        const s = starting[i];
-        const unitId = `${s.type}_${s.locationId}`;
-        const unit: Unit = {
-          id: unitId,
-          type: s.type as UnitType,
-          ownerId: playerId,
-          locationId: s.locationId,
-          mustRetreat: false,
-        };
-        unitMap.set(unitId, unit);
-        allUnits.set(unitId, unit);
+        for (let i = 0; i < placements.length; i++) {
+          const p = placements[i];
+          const unitId = `${p.type}_${p.locationId}_${i}`;
+          const unit: Unit = {
+            id: unitId,
+            type: p.type,
+            ownerId: playerId,
+            locationId: p.locationId,
+            mustRetreat: false,
+          };
+          unitMap.set(unitId, unit);
+          allUnits.set(unitId, unit);
+        }
+
+        players.set(playerId, {
+          id: playerId,
+          name: playerId.charAt(0).toUpperCase() + playerId.slice(1),
+          supplyCenterCount: HOME_SCS[playerId]?.length || 3,
+          units: unitMap,
+          eliminated: false,
+        });
       }
 
+      return {
+        year: GAME_CONFIG.START_YEAR,
+        season: "SPRING",
+        phase: Phase.ORDER,
+        players,
+        provinces,
+        units: allUnits,
+        orders,
+        retreatsNeeded: [],
+      };
+    }
+
+    // Placement phase: create players with no units
+    for (const playerId of PLAYERS) {
       players.set(playerId, {
         id: playerId,
         name: playerId.charAt(0).toUpperCase() + playerId.slice(1),
         supplyCenterCount: HOME_SCS[playerId]?.length || 3,
-        units: unitMap,
+        units: new Map(),
         eliminated: false,
       });
     }
@@ -43,13 +67,80 @@ export class DiplomacyEngine {
     return {
       year: GAME_CONFIG.START_YEAR,
       season: "SPRING",
-      phase: Phase.ORDER,
+      phase: Phase.PLACEMENT,
       players,
       provinces,
       units: allUnits,
       orders,
       retreatsNeeded: [],
     };
+  }
+
+  submitPlacements(state: GameState, playerId: string, placements: Placement[]): GameState {
+    if (state.phase !== Phase.PLACEMENT) return state;
+
+    const nextUnits = new Map(state.units);
+    const nextPlayers = new Map(state.players);
+    const player = nextPlayers.get(playerId);
+    if (!player) return state;
+
+    const nextPlayerUnits = new Map(player.units);
+
+    for (let i = 0; i < placements.length; i++) {
+      const p = placements[i];
+      const unitId = `${p.type}_${p.locationId}_${i}_${playerId}`;
+      const unit: Unit = {
+        id: unitId,
+        type: p.type,
+        ownerId: playerId,
+        locationId: p.locationId,
+        mustRetreat: false,
+      };
+      nextPlayerUnits.set(unitId, unit);
+      nextUnits.set(unitId, unit);
+    }
+
+    nextPlayers.set(playerId, { ...player, units: nextPlayerUnits });
+
+    return { ...state, units: nextUnits, players: nextPlayers };
+  }
+
+  getValidPlacements(state: GameState, playerId: string): Placement[] {
+    if (state.phase !== Phase.PLACEMENT) return [];
+
+    const player = state.players.get(playerId);
+    if (!player) return [];
+
+    const homeSCs = HOME_SCS[playerId] || [];
+    if (homeSCs.length === 0) return [];
+
+    const remaining = GAME_CONFIG.INITIAL_UNITS_PER_PLAYER - player.units.size;
+    if (remaining <= 0) return [];
+
+    const valid: Placement[] = [];
+    for (const scId of homeSCs) {
+      const province = state.provinces.get(scId);
+      if (!province) continue;
+
+      const occupied = [...state.units.values()].some(u => u.locationId === scId);
+      if (occupied) continue;
+
+      valid.push({ type: UnitType.ARMY, locationId: scId });
+
+      if (province.type !== "LAND" as any) {
+        valid.push({ type: UnitType.FLEET, locationId: scId });
+      }
+    }
+
+    return valid;
+  }
+
+  isPlacementComplete(state: GameState): boolean {
+    for (const playerId of PLAYERS) {
+      const player = state.players.get(playerId);
+      if (!player || player.units.size < GAME_CONFIG.INITIAL_UNITS_PER_PLAYER) return false;
+    }
+    return true;
   }
 
   submitOrders(state: GameState, playerId: string, orders: Order[]): GameState {

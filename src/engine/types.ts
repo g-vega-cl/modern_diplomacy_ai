@@ -16,6 +16,7 @@ export enum OrderType {
 }
 
 export enum Phase {
+  PLACEMENT = "PLACEMENT",
   ORDER = "ORDER",
   RESOLUTION = "RESOLUTION",
   RETREAT = "RETREAT",
@@ -92,6 +93,11 @@ export interface BuildOrder {
   readonly type: "CREATE" | "DESTROY";
   readonly unitType?: UnitType;
   readonly locationId?: string;
+}
+
+export interface Placement {
+  readonly type: UnitType;
+  readonly locationId: string;
 }
 
 export interface GameConfig {

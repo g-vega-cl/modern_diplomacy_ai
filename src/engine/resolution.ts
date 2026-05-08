@@ -69,6 +69,16 @@ export class ResolutionEngine {
       const supporter = state.units.get(supporterId);
       if (!supporter) { cutSupports.add(supporterId); continue; }
 
+      // Army in sea cannot support (§8.1)
+      if (supporter.type === UnitType.ARMY) {
+        const suppProv = state.provinces.get(supporter.locationId);
+        if (suppProv?.type === ProvinceType.SEA) {
+          cutSupports.add(supporterId);
+          combatLog.push(supporterId + " support ignored (army in sea cannot support)");
+          continue;
+        }
+      }
+
       const directedTarget = sOrder.supportTargetLocationId;
       const atk = attacksOnProvince.get(supporter.locationId);
       if (!atk) continue;
@@ -113,26 +123,107 @@ export class ResolutionEngine {
 
     // Resolve each contested province
     for (const [destination, attackers] of attacksOnProvince) {
-      const filtered = attackers.filter(a => !usedUnits.has(a.unitId));
+      let filtered = attackers.filter(a => !usedUnits.has(a.unitId));
       if (filtered.length === 0) continue;
 
+      const destProv = state.provinces.get(destination);
       const defender = this.findStationaryDefender(destination, state, unitOrders);
+
+      // ── §8.3 Army landing: auto-fail if coast is occupied or contested ──
+      const armyFromSeaAttackers: Array<{ unitId: string; fromId: string; strength: number }> = [];
+      for (const a of filtered) {
+        const unit = state.units.get(a.unitId);
+        if (unit?.type === UnitType.ARMY) {
+          const fromProv = state.provinces.get(a.fromId);
+          if (fromProv?.type === ProvinceType.SEA) {
+            armyFromSeaAttackers.push(a);
+          }
+        }
+      }
+
+      if (armyFromSeaAttackers.length > 0) {
+        const isOccupied = defender != null && !usedUnits.has(defender.id);
+        const isContested = isOccupied || filtered.length > 1;
+
+        if (isContested) {
+          for (const army of armyFromSeaAttackers) {
+            bouncedMoves.push({ unitId: army.unitId, attemptedLocationId: destination });
+            usedUnits.add(army.unitId);
+            combatLog.push(army.unitId + " landing fails (contested coast)");
+          }
+          filtered = filtered.filter(a => !armyFromSeaAttackers.some(x => x.unitId === a.unitId));
+        }
+      }
+
+      if (filtered.length === 0) continue;
+
+      // ── §8.2 Fleet vs Army in sea: fleets always defeat armies ──
+      if (destProv?.type === ProvinceType.SEA) {
+        const fleetAttackers = filtered.filter(a => {
+          const unit = state.units.get(a.unitId);
+          return unit?.type === UnitType.FLEET;
+        });
+
+        if (fleetAttackers.length > 0) {
+          // Army attackers auto-bounce
+          for (const a of filtered) {
+            const unit = state.units.get(a.unitId);
+            if (unit?.type === UnitType.ARMY) {
+              bouncedMoves.push({ unitId: a.unitId, attemptedLocationId: destination });
+              usedUnits.add(a.unitId);
+              combatLog.push(a.unitId + " army bounced (fleet present in sea)");
+            }
+          }
+          filtered = fleetAttackers;
+
+            // Army defender auto-dislodged by fleet (§8.2)
+          if (defender && !usedUnits.has(defender.id) && defender.type === UnitType.ARMY) {
+            usedUnits.add(defender.id);
+            combatLog.push(defender.id + " auto-dislodged (army vs fleet in sea)");
+            dislodgedUnits.push({ unitId: defender.id, fromLocationId: destination, dislodgedByUnitId: filtered.length > 0 ? filtered[0].unitId : "unknown" });
+
+            // Strongest fleet takes the province
+            if (filtered.length > 0) {
+              let strongest = filtered[0];
+              let tie = false;
+              for (let i = 1; i < filtered.length; i++) {
+                if (filtered[i].strength > strongest.strength) {
+                  strongest = filtered[i];
+                  tie = false;
+                } else if (filtered[i].strength === strongest.strength) {
+                  tie = true;
+                }
+              }
+              if (!tie) {
+                successfulMoves.push({ unitId: strongest.unitId, fromLocationId: strongest.fromId, toLocationId: destination });
+                usedUnits.add(strongest.unitId);
+                for (const a of filtered) {
+                  if (a.unitId !== strongest.unitId && !usedUnits.has(a.unitId)) {
+                    bouncedMoves.push({ unitId: a.unitId, attemptedLocationId: destination });
+                    usedUnits.add(a.unitId);
+                  }
+                }
+              } else {
+                // Fleet tie — all bounce (army still dislodged)
+                for (const a of filtered) {
+                  bouncedMoves.push({ unitId: a.unitId, attemptedLocationId: destination });
+                  usedUnits.add(a.unitId);
+                }
+              }
+            }
+            continue;
+          }
+        }
+      }
+
+      if (filtered.length === 0) continue;
+
+      // ── Normal strength resolution ──
       let defStr = 0;
       if (defender && !usedUnits.has(defender.id)) {
         defStr = defenderStrength.get(defender.id) ?? 1;
       }
 
-      // Sea override
-      let seaOverride = false;
-      const destProv = state.provinces.get(destination);
-      if (defender && destProv?.type === ProvinceType.SEA) {
-        const bestAtt = state.units.get(filtered[0].unitId);
-        if (bestAtt && defender && bestAtt.type === UnitType.FLEET && defender.type === UnitType.ARMY) {
-          seaOverride = true;
-        }
-      }
-
-      // Find the strongest attacker
       let strongest = filtered[0];
       let tie = false;
       for (let i = 1; i < filtered.length; i++) {
@@ -144,7 +235,7 @@ export class ResolutionEngine {
         }
       }
 
-      const wins = seaOverride || (defStr > 0 && strongest.strength > defStr && !tie) ||
+      const wins = (defStr > 0 && strongest.strength > defStr && !tie) ||
                    (defStr === 0 && !tie);
 
       if (wins) {
