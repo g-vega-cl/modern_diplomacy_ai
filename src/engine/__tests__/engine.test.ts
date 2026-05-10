@@ -28,14 +28,15 @@ describe("DiplomacyEngine", () => {
       const engine = new DiplomacyEngine();
       const state = engine.createGame(standardPlacements());
       expect(state.phase).toBe(Phase.ORDER);
-      expect(state.units.size).toBe(21);
+      expect(state.units.size).toBe(22);
     });
 
-    it("each player starts with 3 units when placements provided", () => {
+    it("each player starts with correct number of units based on home SCs", () => {
       const engine = new DiplomacyEngine();
       const state = engine.createGame(standardPlacements());
       for (const player of state.players.values()) {
-        expect(player.units.size).toBe(3);
+        const expectedCount = HOME_SCS[player.id]?.length || 3;
+        expect(player.units.size).toBe(expectedCount);
       }
     });
 
@@ -71,12 +72,12 @@ describe("DiplomacyEngine", () => {
       expect(engine.isPlacementComplete(state)).toBe(false);
     });
 
-    it("isPlacementComplete returns true when all players have 3 units", () => {
+    it("isPlacementComplete returns true when all players have all home SCs filled", () => {
       const engine = new DiplomacyEngine();
       let state = engine.createGame();
       for (const playerId of PLAYERS) {
         const homeSCs = HOME_SCS[playerId] || [];
-        const placements = homeSCs.slice(0, 3).map((scId, i) => ({
+        const placements = homeSCs.map((scId, i) => ({
           type: i === 0 ? UnitType.FLEET : UnitType.ARMY,
           locationId: scId,
         }));
@@ -92,16 +93,16 @@ describe("DiplomacyEngine", () => {
 
       for (const playerId of PLAYERS) {
         const scs = HOME_SCS[playerId] || [];
-        const placements = scs.slice(0, 3).map((scId, i) => ({
+        const placements = scs.map((scId, i) => ({
           type: (i === 0 && scs.length > 1) ? UnitType.FLEET : UnitType.ARMY,
           locationId: scId,
         }));
-        expect(placements.length).toBe(3);
+        expect(placements.length).toBe(scs.length);
         state = engine.submitPlacements(state, playerId, placements);
       }
 
       expect(engine.isPlacementComplete(state)).toBe(true);
-      expect(state.units.size).toBe(21);
+      expect(state.units.size).toBe(22);
 
       state = GameStateMachine.advancePhase(state);
       expect(state.phase).toBe(Phase.ORDER);

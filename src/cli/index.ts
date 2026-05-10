@@ -4,7 +4,7 @@ import { DiplomacyEngine } from "../engine/engine";
 import { GameStateMachine } from "../engine/state-machine";
 import { VictoryChecker } from "../engine/victory";
 import { Phase, Order, UnitType, Placement } from "../engine/types";
-import { GAME_CONFIG } from "../engine/config";
+import { GAME_CONFIG, HOME_SCS } from "../engine/config";
 import { parseOrder } from "./parser";
 import {
   showHeader, showSupplyCenters, showUnits, showPlayerOrdersPrompt,
@@ -293,13 +293,14 @@ async function main() {
 
         let nextState = { ...state };
         const placements: Placement[] = [];
-        const needed = GAME_CONFIG.INITIAL_UNITS_PER_PLAYER - player.units.size;
+        const totalNeeded = HOME_SCS[player.id]?.length || GAME_CONFIG.INITIAL_UNITS_PER_PLAYER;
+        const needed = totalNeeded - player.units.size;
 
         while (placements.length < needed) {
           clearScreen();
           showHeader(nextState);
           showUnits(nextState);
-          showPlacementPrompt(player, validPlacements, placements.length, GAME_CONFIG.INITIAL_UNITS_PER_PLAYER);
+          showPlacementPrompt(player, validPlacements, placements.length, totalNeeded);
 
           const line = await ask();
           if (line.toLowerCase() === "quit" || line.toLowerCase() === "q") {

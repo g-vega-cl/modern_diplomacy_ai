@@ -25,6 +25,6 @@ export const STARTING_UNITS: Record<string, Array<{ type: "A" | "F"; locationId:
   germany: [{ type: "F", locationId: "KIE" }, { type: "A", locationId: "BER" }, { type: "A", locationId: "MUN" }],
   italy: [{ type: "F", locationId: "NAP" }, { type: "A", locationId: "ROM" }, { type: "A", locationId: "VEN" }],
   austria: [{ type: "F", locationId: "TRI" }, { type: "A", locationId: "VIE" }, { type: "A", locationId: "BUD" }],
-  russia: [{ type: "F", locationId: "STP_NC" }, { type: "A", locationId: "MOS" }, { type: "A", locationId: "WAR" }],
+  russia: [{ type: "F", locationId: "STP_NC" }, { type: "A", locationId: "MOS" }, { type: "A", locationId: "WAR" }, { type: "A", locationId: "SEV" }],
   turkey: [{ type: "F", locationId: "ANK" }, { type: "A", locationId: "CON" }, { type: "A", locationId: "SMY" }],
 };

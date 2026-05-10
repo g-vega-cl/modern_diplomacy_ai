@@ -114,7 +114,7 @@ export class DiplomacyEngine {
     const homeSCs = HOME_SCS[playerId] || [];
     if (homeSCs.length === 0) return [];
 
-    const remaining = GAME_CONFIG.INITIAL_UNITS_PER_PLAYER - player.units.size;
+    const remaining = homeSCs.length - player.units.size;
     if (remaining <= 0) return [];
 
     const valid: Placement[] = [];
@@ -138,7 +138,8 @@ export class DiplomacyEngine {
   isPlacementComplete(state: GameState): boolean {
     for (const playerId of PLAYERS) {
       const player = state.players.get(playerId);
-      if (!player || player.units.size < GAME_CONFIG.INITIAL_UNITS_PER_PLAYER) return false;
+      const requiredUnits = HOME_SCS[playerId]?.length || GAME_CONFIG.INITIAL_UNITS_PER_PLAYER;
+      if (!player || player.units.size < requiredUnits) return false;
     }
     return true;
   }

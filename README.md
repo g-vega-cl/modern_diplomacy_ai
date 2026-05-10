@@ -30,7 +30,7 @@ Seven Great Powers compete for control of Europe (1901):
 | Germany | BER, KIE, MUN | F KIE, A BER, A MUN |
 | Italy | NAP, ROM, VEN | F NAP, A ROM, A VEN |
 | Austria | VIE, TRI, BUD | F TRI, A VIE, A BUD |
-| Russia | MOS, SEV, STP, WAR | F STP(NC), A MOS, A WAR |
+| Russia | MOS, SEV, STP, WAR | F STP(NC), A MOS, A WAR, A SEV |
 | Turkey | ANK, CON, SMY | F ANK, A CON, A SMY |
 
 During the **placement phase**, players may customize unit types and positions on their home supply centers (coastal SCs allow fleets; inland SCs are army-only).
@@ -43,7 +43,7 @@ During the **placement phase**, players may customize unit types and positions o
 pnpm play
 ```
 
-**Placement Phase:** Each power places their 3 units on their home supply centers, choosing army or fleet per center.
+**Placement Phase:** Each power places their units on their home supply centers (most have 3; Russia has 4), choosing army or fleet per center.
 
 ```
 A PAR    — Place army in Paris
@@ -110,7 +110,7 @@ const engine = new DiplomacyEngine();
 // Start with placement phase (players choose units)
 let state = engine.createGame();
 
-// Player places their 3 units on home SCs
+// Player places units on their home SCs (per-player count based on home SCs)
 const valid = engine.getValidPlacements(state, "england");
 // → e.g. [{ type: ARMY, locationId: "EDI" }, { type: FLEET, locationId: "EDI" }, ...]
 
@@ -166,7 +166,6 @@ Multi-coast provinces: **Spain**, **St. Petersburg**, **Bulgaria** — fleet mov
 | Sea combat | Support-based | Fleet auto-defeats army (overrides all strength) |
 | Convoys | Required for amphibious | Not implemented (simplified) |
 | Draws | Supported | Solo victory only |
-| Russia start | 4 units | 3 units (all powers equal) |
 
 All standard mechanics implemented: simultaneous resolution, support/hold/move, support cutting (with beleaguered garrison exception), direct swap detection, multi-way standoffs, dislodgement and retreat, fall SC ownership transfer, build/disband.
 
