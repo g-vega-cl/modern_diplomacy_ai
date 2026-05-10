@@ -187,15 +187,106 @@ A game design specification for a 2–9 player modern-world strategy board game.
 
 ---
 
+## Negotiation Layer
+
+A REST-based chat system for diplomatic negotiations, designed for both human players (browser UI) and LLM agents (HTTP API). Built as a vertical feature module.
+
+### Quick Start
+
+```bash
+pnpm dev          # Starts HTTP on :3000
+```
+
+**Browser:** Navigate to `/negotiation`, select your nation, and chat.
+
+**LLM Agent:** Call the REST API directly (see below).
+
+### REST API
+
+All endpoints live under `/api/chat`. Messages are JSON. In-memory storage, capped at 200 messages per channel.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/chat/channels?playerId=` | List player's channels |
+| `POST` | `/api/chat/channels` | Create group `{ name, createdBy, memberIds }` |
+| `POST` | `/api/chat/channels/:id/invite` | Invite players `{ invitedBy, playerIds }` |
+| `POST` | `/api/chat/channels/:id/join` | Join channel `{ playerId }` |
+| `POST` | `/api/chat/channels/:id/leave` | Leave channel `{ playerId }` |
+| `GET` | `/api/chat/channels/:id/messages?since=` | Get messages (add `?since=<timestamp>` for delta polling) |
+| `POST` | `/api/chat/channels/:id/messages` | Send message `{ senderId, senderName, content }` |
+
+**Polling for LLMs:** Use `GET /api/chat/channels/:id/messages?since=<lastTimestamp>` to fetch only new messages. Track the highest `timestamp` from each response as your cursor.
+
+**Example flow for an LLM agent:**
+```bash
+# France gets their channels
+GET /api/chat/channels?playerId=france
+
+# France reads global chat
+GET /api/chat/channels/global/messages
+
+# France sends a message
+POST /api/chat/channels/global/messages
+{"senderId":"france","senderName":"France","content":"England, I propose an alliance."}
+
+# France checks for new messages since last poll
+GET /api/chat/channels/global/messages?since=1715378400000
+
+# France creates a private group with england and germany
+POST /api/chat/channels
+{"name":"Northern Alliance","createdBy":"france","memberIds":["england","germany"]}
+```
+
+### Features
+
+- **Global channel** — all 7 powers can talk. Any player can read/write.
+- **Group chats** — ad-hoc private groups of 2+ players. Create, invite, join, leave.
+- **In-memory storage** — message history per channel (capped at 200 messages).
+- **Delta polling** — `?since=` parameter for efficient LLM polling.
+
+### Architecture
+
+```
+src/features/negotiation/     ← All feature code (vertical module)
+  types.ts                    — Message, ChatChannel types
+  chat-manager.ts             — In-memory singleton: channels, messages, CRUD
+  use-chat.ts                 — React hook (REST + polling)
+  chat-panel.tsx              — Channel sidebar + active chat
+  global-chat.tsx             — Global channel view
+  group-chat.tsx              — Group channel with invite/leave controls
+  create-group-dialog.tsx     — Modal for creating groups
+  negotiation-page.tsx        — Player selection → ChatPanel
+  index.ts                    — Barrel exports
+  __tests__/
+    chat-manager.test.ts      — 32 tests
+
+server/api/chat/              ← REST API (LLM-friendly)
+  channels.get.ts
+  channels.post.ts
+  channels/[id]/invite.post.ts
+  channels/[id]/join.post.ts
+  channels/[id]/leave.post.ts
+  channels/[id]/messages.get.ts
+  channels/[id]/messages.post.ts
+
+src/routes/
+  negotiation.tsx             — Browser UI at /negotiation
+```
+
 ## Project Structure
 
 ```
 src/
-  engine/     — Diplomacy Light game engine
-  cli/        — Terminal interface
-  routes/     — TanStack Router routes (WIP)
-  components/ — React components (WIP)
-  utils/      — Shared utilities
+  engine/         — Diplomacy Light game engine
+  features/       — Vertical feature modules (negotiation, etc.)
+  cli/            — Terminal interface
+  routes/         — TanStack Router routes
+  components/     — React components
+  utils/          — Shared utilities
+```
+
+```bash
+pnpm test          # 112 tests (80 engine + 32 negotiation)
 ```
 
 ---
