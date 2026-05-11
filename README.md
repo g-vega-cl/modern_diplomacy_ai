@@ -1,8 +1,27 @@
 # Modern Diplomacy AI
 
-TypeScript game engine and strategy board game project.
+TypeScript game engine + AI agent orchestration for the classic board game Diplomacy.
 
-- **[Diplomacy Light](#diplomacy-light-engine)** — A complete adjudication engine for the classic board game Diplomacy, with an interactive terminal CLI.
+- **[AI Orchestrator](#ai-orchestrator)** — Seven AI models play against each other via OpenRouter, with negotiation and simultaneous order resolution.
+- **[Diplomacy Light](#diplomacy-light-engine)** — A complete adjudication engine for Diplomacy, with an interactive terminal CLI.
+
+
+---
+
+## AI Orchestrator
+
+Seven AI powers. OpenRouter. No mercy.
+
+Each country is played by a different LLM model (Claude, GPT-4o, Gemini, etc.) with a unique persona. Agents negotiate in real-time chat, then simultaneously submit orders — just like the real board game.
+
+### Quick Start
+
+```bash
+export OPENROUTER_API_KEY=sk-or-v1-...
+python3 ai-orchestrator/orchestrator.py
+```
+
+See [ai-orchestrator/README.md](ai-orchestrator/README.md) for full configuration and model options.
 
 
 ---
@@ -172,10 +191,16 @@ All standard mechanics implemented: simultaneous resolution, support/hold/move, 
 ### Development
 
 ```bash
-pnpm test          # 80 tests
+pnpm test          # 126 TypeScript tests (80 engine + 32 negotiation + 14 bridge)
 pnpm test:watch    # Watch mode
-pnpm play          # Terminal CLI
+pnpm play          # Terminal CLI (human vs human)
 pnpm build         # TypeScript check
+
+# Python orchestrator tests
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 18 Python tests
+
+# Full AI game
+python3 ai-orchestrator/orchestrator.py  # 7 AI agents (needs OPENROUTER_API_KEY)
 ```
 
 
@@ -270,16 +295,23 @@ src/routes/
 
 ```
 src/
-  engine/         — Diplomacy Light game engine
-  features/       — Vertical feature modules (negotiation, etc.)
-  cli/            — Terminal interface
-  routes/         — TanStack Router routes
-  components/     — React components
-  utils/          — Shared utilities
+  engine/              — Diplomacy Light game engine (75 territories, full adjudication)
+  features/            — Vertical feature modules (negotiation, etc.)
+  cli/                 — Terminal interface (human players)
+  routes/              — TanStack Router routes
+  components/          — React components
+  utils/               — Shared utilities
+
+ai-orchestrator/
+  orchestrator.py      — Main game loop, 7 AI agents, OpenRouter client
+  engine-bridge.ts     — Node.js subprocess wrapping the TypeScript engine
+  agents.json          — Country → OpenRouter model + persona configuration
+  __tests__/           — 14 bridge tests + 18 Python tests
 ```
 
 ```bash
-pnpm test          # 112 tests (80 engine + 32 negotiation)
+pnpm test              # 126 tests (80 engine + 32 negotiation + 14 bridge)
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 18 Python tests
 ```
 
 ---
