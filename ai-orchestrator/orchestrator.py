@@ -66,7 +66,11 @@ class LLMClient:
         if "error" in result:
             raise RuntimeError(f"OpenRouter error: {json.dumps(result['error'])}")
         
-        return result["choices"][0]["message"]["content"]
+        content = result["choices"][0]["message"].get("content")
+        if content is None:
+            # Some models return null content (rate limits, degenerate responses)
+            return ""
+        return content
 
 # ─── Engine Bridge (subprocess) ─────────────────────────────────────
 
@@ -357,18 +361,34 @@ Respond with JSON array only."""
         if self.msg_count >= self.max_msgs:
             return
         
-        # Build context from recent messages
+        # Build a channel name lookup
+        ch_names = {}
+        for ch in channels:
+            ch_names[ch["id"]] = ch.get("name", ch["id"])
+        
+        # Build context from recent messages with channel info
         recent = new_messages[-5:]
         msgs_text = "\n".join(
-            f"[{m.get('senderName', m.get('senderId'))}]: {m.get('content', '')[:300]}"
-            for _, m in recent
+            f"[{ch_names.get(ch.get('id', '?'), ch.get('id', '?'))} — {m.get('senderName', m.get('senderId'))}]: {m.get('content', '')[:300]}"
+            for ch, m in recent if isinstance(ch, dict)
         )
         
-        prompt = f"""You are {self.country_name}. New messages in diplomacy chat:
+        # Build list of available channels for the agent to know its options
+        channel_list = "\n".join(
+            f"  • \"{ch.get('name', ch['id'])}\" (id: {ch['id']})"
+            for ch in channels
+        )
+        
+        prompt = f"""You are {self.country_name}. The negotiation channels available to you:
+
+{channel_list}
+
+New messages:
 
 {msgs_text}
 
-Should you respond? Reply with your message text (1-3 sentences, strategic, in character).
+Should you respond? If so, write your message text (1-3 sentences, strategic, in character).
+If replying, you will respond in the same channel as the last message. 
 Or reply with just "PASS" to stay silent.
 
 Your response:"""
@@ -381,6 +401,8 @@ Your response:"""
             max_tokens=300,
         )
         
+        if not response:
+            return
         response = response.strip()
         if response.upper() == "PASS" or not response:
             return
@@ -400,11 +422,25 @@ Your response:"""
         
         # ~25% chance to initiate when quiet
         if hash(self.player_id + str(int(time.time() / 8))) % 10 < 2.5:
+            # Show available channels
+            channel_list = "\n".join(
+                f"  • \"{ch.get('name', ch['id'])}\" — this channel's ID is \"{ch['id']}\""
+                for ch in channels
+            )
+            
             prompt = f"""You are {self.country_name}. Negotiation has begun and no one has spoken.
-Start the conversation in the global channel. Propose an alliance, make an opening statement, 
+Start the conversation. Propose an alliance, make an opening statement, 
 or probe another power's intentions. Be in character. 1-2 sentences.
 
-Your message:"""
+Available channels:
+{channel_list}
+
+IMPORTANT: Your reply must be EXACTLY two lines. First line: the channel ID you want to post in.
+Second line: your message. Example:
+global
+Greetings, fellow powers. France seeks peaceful cooperation in the west.
+
+Your response:"""
             
             response = self.llm.chat(
                 model=self.model,
@@ -414,13 +450,29 @@ Your message:"""
                 max_tokens=200,
             )
             
+            if not response:
+                return
             response = response.strip()
-            if response and response.upper() != "PASS":
+            if not response or response.upper() == "PASS":
+                return
+            
+            # Parse: first line = channel ID, rest = message
+            lines = response.split("\n", 1)
+            if len(lines) == 2:
+                channel_id = lines[0].strip()
+                message_text = lines[1].strip()
+            else:
+                # Fallback: use global and the whole response as message
+                channel_id = "global"
+                message_text = lines[0].strip()
+            
+            if message_text:
                 try:
-                    self.bridge.chat_send("global", self.player_id, self.country_name, response)
+                    self.bridge.chat_send(channel_id, self.player_id, self.country_name, message_text)
                     self.msg_count += 1
-                    short = response[:80].replace("\n", " ")
-                    print(f"  💬 {self.country_name} (init): \"{short}...\"", flush=True)
+                    short = message_text[:80].replace("\n", " ")
+                    ch_name = channel_id
+                    print(f"  💬 {self.country_name} (init in {ch_name}): \"{short}...\"", flush=True)
                 except Exception as e:
                     print(f"  ⚠ {self.country_name} send err: {e}", flush=True)
     
@@ -457,6 +509,9 @@ Choice:"""
     
     def _parse_json(self, text: str) -> list:
         """Extract JSON array from LLM response."""
+        if not text:
+            print(f"  ⚠ {self.country_name}: empty response from LLM", flush=True)
+            return []
         text = text.strip()
         for prefix in ["```json", "```"]:
             if text.startswith(prefix):
@@ -583,6 +638,30 @@ class Orchestrator:
     def _run_order_phase(self):
         print(f"\n  🗣 NEGOTIATION WINDOW ({self.neg_window}s)")
         print(f"  Max {self.max_msgs} messages/agent")
+        
+        # Pre-create private DM channels between all pairs
+        agent_ids = list(self.agents.keys())
+        dm_channels = {}  # (a, b) -> channel dict
+        pair_names = {}   # (a, b) -> short name for LLM prompts
+        for i, a in enumerate(agent_ids):
+            for b in agent_ids[i+1:]:
+                pair_key = (a, b)
+                name_a = self.agents[a].country_name
+                name_b = self.agents[b].country_name
+                channel_name = f"DM: {name_a} ↔ {name_b}"
+                short_name = f"DM:{a}:{b}"
+                try:
+                    result = self.bridge.chat_create_group(channel_name, a, [b])
+                    ch = result.get("channel", {})
+                    dm_channels[pair_key] = ch
+                    pair_names[pair_key] = short_name
+                except Exception as e:
+                    print(f"  ⚠ Failed DM {a}-{b}: {e}", flush=True)
+        
+        # Store on the bridge for agents to look up channel names
+        self._dm_pair_names = pair_names
+        self._dm_channels = dm_channels
+        print(f"  📨 {len(dm_channels)} private channels created", flush=True)
         
         # Start all agents in parallel threads
         threads = []

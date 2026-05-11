@@ -148,6 +148,11 @@ class TestOrderParsing(unittest.TestCase):
         orders = self.agent._parse_json("")
         self.assertEqual(orders, [])
     
+    def test_parse_none_returns_empty(self):
+        """None response (LLM returned null content) should return empty list without crashing."""
+        orders = self.agent._parse_json(None)
+        self.assertEqual(orders, [])
+    
     def test_parse_no_array(self):
         """JSON object without array should return empty."""
         response = '{"message": "I submit my orders"}'

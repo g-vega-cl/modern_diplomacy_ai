@@ -20,7 +20,7 @@ python3 ai-orchestrator/orchestrator.py
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
 pnpm test                          # 126 tests: 112 engine + 14 bridge
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 17 orchestrator tests
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 19 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -70,19 +70,22 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 ┌─────────────────────────────────────────────────────┐
 │ SPRING ORDER                                        │
 │  1. All 7 agents receive board state + valid moves  │
-│  2. 240s negotiation window (parallel threads)      │
-│     → agents chat in global + private groups        │
-│  3. Window closes, each agent generates orders      │
-│  4. All orders submitted simultaneously to engine   │
-│  5. Engine resolves (supports, combat, standoffs)   │
+│  2. 21 private DM channels are pre-created           │
+│     (one for each pair of powers)                    │
+│  3. 240s negotiation window (parallel threads)       │
+│     → agents chat in global + private DM channels    │
+│     → agents see which channel each message is in    │
+│  4. Window closes, each agent generates orders       │
+│  5. All orders submitted simultaneously to engine    │
+│  6. Engine resolves (supports, combat, standoffs)   │
 ├─────────────────────────────────────────────────────┤
 │ RETREAT (if any units dislodged)                    │
-│  6. Each dislodged unit retreats or disbands        │
+│  7. Each dislodged unit retreats or disbands        │
 ├─────────────────────────────────────────────────────┤
 │ FALL ORDER (same as spring)                         │
 ├─────────────────────────────────────────────────────┤
 │ WINTER BUILDS                                       │
-│  7. Delta (SCs - units): build or disband           │
+│  8. Delta (SCs - units): build or disband           │
 ├─────────────────────────────────────────────────────┤
 │ NEXT YEAR (repeat until 18 SCs or max years)        │
 └─────────────────────────────────────────────────────┘
@@ -137,7 +140,7 @@ Other popular options: `anthropic/claude-sonnet-4`, `openai/gpt-4o`, `google/gem
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
 | `agents.json` | Country → OpenRouter model + persona + game settings |
 | `__tests__/engine-bridge.test.ts` | 14 tests for the JSON-line bridge protocol |
-| `__tests__/test_orchestrator.py` | 18 tests for config, parsing, prompts |
+| `__tests__/test_orchestrator.py` | 19 tests for config, parsing, prompts, None-guard |
 
 ## Troubleshooting
 
@@ -151,6 +154,9 @@ Make sure `pnpm install` has been run in the repo root. The bridge needs `tsx` (
 
 **Agents produce invalid orders**
 The orchestrator falls back to HOLD orders if an agent's JSON can't be parsed. Check the stderr output for the raw LLM response.
+
+**"NoneType" errors in negotiation or placement**
+Some flash-tier models occasionally return `null` content from OpenRouter. The orchestrator handles this gracefully — empty responses cause a PASS in negotiation or a fallback empty list in placement/order parsing. If a model consistently returns null, swap it for a more reliable one.
 
 **Rate limiting / costs**
 Each negotiation message costs ~200-300 tokens. At 15 messages/agent × 7 agents × 2 phases × ~20 years, a full game could use ~100K-200K input tokens. Set lower `max_negotiation_messages_per_agent` or `max_years` to control costs.
