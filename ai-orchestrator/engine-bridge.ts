@@ -97,20 +97,7 @@ class ChatManager {
 const chatManager = new ChatManager();
 const engine = new DiplomacyEngine();
 
-// Create game with default placements
-const defaultPlacements: Record<string, Placement[]> = {};
-for (const playerId of PLAYERS) {
-  const units = STARTING_UNITS[playerId];
-  if (units) {
-    defaultPlacements[playerId] = units.map(u => ({
-      type: u.type as UnitType,
-      locationId: u.locationId,
-    }));
-  }
-}
-
-let state = engine.createGame(defaultPlacements);
-state = GameStateMachine.advancePhase(state); // skip placement → ORDER
+let state = engine.createGame(); // starts in PLACEMENT — LLMs will decide placements
 
 function serializeState(s: GameState) {
   const players: Record<string, any> = {};
@@ -180,6 +167,8 @@ rl.on("line", (line: string) => {
             playerUnits[uid] = { id: u.id, type: u.type, locationId: u.locationId };
           }
         }
+        const validBuilds = view.validBuilds;
+        const validPlacements = engine.getValidPlacements(state, params.playerId);
         process.stdout.write(respond(id, {
           view: {
             player: {
@@ -195,7 +184,8 @@ rl.on("line", (line: string) => {
               locationId: u.locationId, mustRetreat: u.mustRetreat,
             })),
             validMoves,
-            validBuilds: view.validBuilds,
+            validBuilds,
+            validPlacements,
           }
         }) + "\n");
         break;
@@ -295,9 +285,20 @@ rl.on("line", (line: string) => {
         break;
       }
 
-      case "reset": {
-        state = engine.createGame(defaultPlacements);
+      case "submitPlacements": {
+        state = engine.submitPlacements(state, params.playerId, params.placements);
+        process.stdout.write(respond(id, {}) + "\n");
+        break;
+      }
+
+      case "advancePhase": {
         state = GameStateMachine.advancePhase(state);
+        process.stdout.write(respond(id, { phase: state.phase }) + "\n");
+        break;
+      }
+
+      case "reset": {
+        state = engine.createGame(); // restart in PLACEMENT
         chatManager.reset();
         process.stdout.write(respond(id, {}) + "\n");
         break;

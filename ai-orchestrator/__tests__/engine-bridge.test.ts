@@ -71,6 +71,26 @@ function stopBridge() {
   if (rl) rl.close();
 }
 
+// Standard Diplomacy starting positions (used for tests that need placed units)
+const STANDARD_PLACEMENTS: Record<string, Array<{type: string; locationId: string}>> = {
+  england: [{ type: "F", locationId: "LON" }, { type: "F", locationId: "EDI" }, { type: "A", locationId: "LVP" }],
+  france: [{ type: "F", locationId: "BRE" }, { type: "A", locationId: "PAR" }, { type: "A", locationId: "MAR" }],
+  germany: [{ type: "F", locationId: "KIE" }, { type: "A", locationId: "BER" }, { type: "A", locationId: "MUN" }],
+  italy: [{ type: "F", locationId: "NAP" }, { type: "A", locationId: "ROM" }, { type: "A", locationId: "VEN" }],
+  austria: [{ type: "F", locationId: "TRI" }, { type: "A", locationId: "VIE" }, { type: "A", locationId: "BUD" }],
+  russia: [{ type: "F", locationId: "STP_NC" }, { type: "A", locationId: "MOS" }, { type: "A", locationId: "WAR" }, { type: "A", locationId: "SEV" }],
+  turkey: [{ type: "F", locationId: "ANK" }, { type: "A", locationId: "CON" }, { type: "A", locationId: "SMY" }],
+};
+
+/** Submit standard placements for all 7 powers and advance to ORDER phase. */
+async function placeAllStandardUnits(): Promise<void> {
+  await call("reset");
+  for (const [pid, placements] of Object.entries(STANDARD_PLACEMENTS)) {
+    await call("submitPlacements", { playerId: pid, placements });
+  }
+  await call("advancePhase"); // PLACEMENT → ORDER
+}
+
 describe("Engine Bridge", () => {
   beforeAll(async () => {
     await startBridge();

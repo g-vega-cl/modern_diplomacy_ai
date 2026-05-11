@@ -121,6 +121,12 @@ class EngineBridge:
     def submit_orders(self, player_id: str, orders: list):
         return self._call("submitOrders", {"playerId": player_id, "orders": orders})
     
+    def submit_placements(self, player_id: str, placements: list):
+        return self._call("submitPlacements", {"playerId": player_id, "placements": placements})
+    
+    def advance_phase(self) -> dict:
+        return self._call("advancePhase")
+    
     def resolve(self) -> dict:
         return self._call("resolve")
     
@@ -258,6 +264,54 @@ Respond with a JSON array of orders. Nothing else."""
             system=self.system_prompt,
             temperature=0.3,
             max_tokens=1000,
+        )
+        return self._parse_json(response)
+    
+    def generate_placements(self) -> list:
+        """Ask the LLM to choose where to place its initial units."""
+        try:
+            view = self.bridge.get_player_view(self.player_id)
+        except Exception as e:
+            return []
+        
+        valid_placements = view.get("validPlacements", [])
+        if not valid_placements:
+            return []
+        
+        # Group valid placements by location
+        by_location = {}
+        for p in valid_placements:
+            loc = p.get("locationId", "?")
+            by_location.setdefault(loc, []).append(p.get("type", "?"))
+        
+        placement_lines = []
+        for loc, types in by_location.items():
+            placement_lines.append(f"  {loc}: can place {' or '.join(types)}")
+        
+        home_count = len(by_location)  # number of home SCs = placements needed
+        
+        prompt = f"""You are the Grand Strategist of {self.country_name}. It is Spring 1901.
+
+Your home supply centers (you must place exactly {home_count} unit(s), one per center):
+{chr(10).join(placement_lines)}
+
+Choose wisely — this determines your opening strategy:
+- Army (A): strong on land, conquers interior territories
+- Fleet (F): controls seas, threatens coastal centers
+- A fleet must be placed on a COASTAL center only
+- Each center gets exactly ONE unit
+
+Respond with a JSON array of placements. Example:
+[{{"type": "A", "locationId": "VIE"}}, {{"type": "F", "locationId": "TRI"}}, {{"type": "A", "locationId": "BUD"}}]
+
+Respond with JSON array only."""
+
+        response = self.llm.chat(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            system=self.system_prompt,
+            temperature=0.5,
+            max_tokens=500,
         )
         return self._parse_json(response)
     
@@ -481,7 +535,11 @@ class Orchestrator:
                 print(f"  {season} {year} — Phase: {phase}")
                 print(f"{'─' * 50}")
                 
-                if phase == "ORDER":
+                if phase == "PLACEMENT":
+                    self._run_placement_phase()
+                    self.bridge.advance_phase()  # PLACEMENT → ORDER
+                
+                elif phase == "ORDER":
                     self._run_order_phase()
                     result = self.bridge.resolve()
                     self._show_resolution(result)
@@ -504,6 +562,23 @@ class Orchestrator:
                     break
         finally:
             self.bridge.shutdown()
+    
+    def _run_placement_phase(self):
+        print(f"\n  🎯 PLACEMENT — Each power chooses its starting positions")
+        print(f"  (Armies vs Fleets — strategic opening decisions)")
+        
+        for pid, agent in self.agents.items():
+            try:
+                placements = agent.generate_placements()
+                if placements:
+                    self.bridge.submit_placements(pid, placements)
+                    print(f"  ✓ {agent.country_name}: {len(placements)} placements")
+                    for p in placements:
+                        print(f"      {p.get('type', '?')} at {p.get('locationId', '?')}")
+                else:
+                    print(f"  ⚠ {agent.country_name}: parse error, fallback needed")
+            except Exception as e:
+                print(f"  ❌ {agent.country_name}: {e}", flush=True)
     
     def _run_order_phase(self):
         print(f"\n  🗣 NEGOTIATION WINDOW ({self.neg_window}s)")
