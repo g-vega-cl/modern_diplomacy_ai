@@ -3,7 +3,7 @@
 TypeScript game engine and strategy board game project.
 
 - **[Diplomacy Light](#diplomacy-light-engine)** — A complete adjudication engine for the classic board game Diplomacy, with an interactive terminal CLI.
-- **[World Dominion](WORLD_DOMINION.md)** — Design specification for a modern-world strategy board game.
+
 
 ---
 
@@ -178,13 +178,7 @@ pnpm play          # Terminal CLI
 pnpm build         # TypeScript check
 ```
 
----
 
-## World Dominion
-
-A game design specification for a 2–9 player modern-world strategy board game. See [WORLD_DOMINION.md](WORLD_DOMINION.md).
-
----
 
 ## Negotiation Layer
 
