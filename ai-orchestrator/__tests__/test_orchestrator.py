@@ -275,5 +275,146 @@ class TestConfigValidation(unittest.TestCase):
         self.assertEqual(actual, required, f"Missing countries: {required - actual}")
 
 
+class TestFallbackPlacements(unittest.TestCase):
+    """Test that when the LLM returns empty, valid placements are still submitted."""
+
+    def setUp(self):
+        config = {
+            "model": "test/model",
+            "country_name": "Italy",
+            "persona": "You are Italy.",
+        }
+        global_inst = "You are {country_name}."
+
+        class MockBridge:
+            def get_state(self):
+                return {"year": 1901, "season": "SPRING", "phase": "PLACEMENT",
+                        "players": {}, "units": {}, "retreatsNeeded": []}
+            def get_player_view(self, pid):
+                return {
+                    "player": {"name": "Italy", "units": {}, "eliminated": False,
+                               "supplyCenterCount": 3, "unitCount": 0},
+                    "visibleUnits": [],
+                    "validMoves": {},
+                    "validBuilds": [],
+                    "validPlacements": [
+                        {"type": "F", "locationId": "NAP"},
+                        {"type": "A", "locationId": "NAP"},
+                        {"type": "F", "locationId": "ROM"},
+                        {"type": "A", "locationId": "ROM"},
+                        {"type": "F", "locationId": "VEN"},
+                        {"type": "A", "locationId": "VEN"},
+                    ],
+                }
+
+        self.agent = DiplomacyAgent("italy", config, global_inst,
+                                     LLMClient("fake-key"), MockBridge())
+
+    def test_fallback_placements_when_llm_returns_empty(self):
+        """When LLM returns empty, fallback should pick one placement per location."""
+        # Simulate the orchestrator's fallback logic:
+        # when generate_placements() returns [], pull validPlacements from view
+        view = self.agent.bridge.get_player_view(self.agent.player_id)
+        valid = view.get("validPlacements", [])
+        fallback = self.agent._build_fallback_placements(valid)
+
+        self.assertEqual(len(fallback), 3,
+                         f"Should have 3 placements, got {len(fallback)}: {fallback}")
+
+        # Each location should appear exactly once
+        locations = [p["locationId"] for p in fallback]
+        self.assertEqual(sorted(locations), ["NAP", "ROM", "VEN"])
+
+        # Each placement should have type and locationId
+        for p in fallback:
+            self.assertIn("type", p)
+            self.assertIn("locationId", p)
+
+    def test_fallback_uses_first_valid_type_per_location(self):
+        """Fallback should pick the first valid type for each location."""
+        valid = [
+            {"type": "F", "locationId": "NAP"},
+            {"type": "A", "locationId": "NAP"},
+            {"type": "F", "locationId": "ROM"},
+        ]
+        fallback = self.agent._build_fallback_placements(valid)
+        self.assertEqual(len(fallback), 2)
+        self.assertEqual(fallback[0], {"type": "F", "locationId": "NAP"})
+        self.assertEqual(fallback[1], {"type": "F", "locationId": "ROM"})
+
+    def test_fallback_empty_when_no_valid_placements(self):
+        """Should return empty list when there are no valid placements."""
+        fallback = self.agent._build_fallback_placements([])
+        self.assertEqual(fallback, [])
+
+
+class TestChatMessageSanitization(unittest.TestCase):
+    """Test that LLM chat responses are sanitized before posting to channels."""
+
+    def setUp(self):
+        config = {
+            "model": "test/model",
+            "country_name": "Germany",
+            "persona": "You are Germany.",
+        }
+        global_inst = "You are {country_name}."
+        # Minimal bridge — just needs to exist
+        class MockBridge:
+            pass
+        self.agent = DiplomacyAgent("germany", config, global_inst,
+                                     LLMClient("fake-key"), MockBridge())
+
+    def test_strips_meta_reasoning(self):
+        """Models outputting 'We need to decide: respond or PASS' should be sanitized."""
+        text = "We need to decide: respond or PASS. The last message in Global Diplomacy is from Turkey. We should reply. The Kaiser shares the desire for Balkan stability."
+        result = self.agent._sanitize_chat_message(text)
+        self.assertNotIn("We need to decide", result,
+                         "Meta-reasoning should be stripped")
+        self.assertNotIn("respond or PASS", result,
+                         "PASS instruction to self should be stripped")
+
+    def test_strips_raw_json_content(self):
+        """Austria outputting [{channelId: global, content: ...}] should be fixed."""
+        text = '[{"channelId": "global", "content": "Austria welcomes Turkey\'s willingness to coordinate."}]'
+        result = self.agent._sanitize_chat_message(text)
+        self.assertNotIn("channelId", result, "Raw JSON should be stripped")
+        self.assertIn("Austria welcomes", result, "Message content should be preserved")
+
+    def test_strips_own_markup_prefixes(self):
+        """Models shouldn't invent their own '[Global Diplomacy — Country]:' markup."""
+        text = "Global Diplomacy — Turkey: Welcome, Austria, and thank you, Germany."
+        result = self.agent._sanitize_chat_message(text)
+        self.assertNotEqual(result[:20].lower(), "global diplomacy —",
+                           "Self-invented channel prefix should be stripped")
+
+    def test_strips_markdown_strong_bold_markers(self):
+        """'**[Global Diplomacy — Country]:**' should be stripped."""
+        text = "**[Global Diplomacy — England]:** The British Crown observes these continental maneuvers."
+        result = self.agent._sanitize_chat_message(text)
+        self.assertNotIn("**", result, "Markdown bold markers should be stripped")
+        self.assertIn("The British Crown", result[:50], "Message body should be preserved")
+
+    def test_preserves_valid_in_character_message(self):
+        """A clean in-character message should pass through unchanged."""
+        text = "The Kaiser shares the Sultan's desire for stability. From our side, we see no immediate conflict in the Balkans."
+        result = self.agent._sanitize_chat_message(text)
+        self.assertEqual(text.strip(), result.strip())
+
+    def test_handles_empty_string(self):
+        """Empty string should return empty string."""
+        self.assertEqual(self.agent._sanitize_chat_message(""), "")
+
+    def test_handles_none(self):
+        """None should return empty string without crashing."""
+        self.assertEqual(self.agent._sanitize_chat_message(None), "")
+
+    def test_strips_leading_json_prefix(self):
+        """A message that starts with JSON-like structure but has text after."""
+        text = '[{"channelId": "global"}]\nAustria welcomes Turkey\'s willingness to coordinate.'
+        result = self.agent._sanitize_chat_message(text)
+        self.assertNotIn("[{", result, "JSON prefix should be stripped")
+        self.assertIn("Austria welcomes", result, "Text after JSON should remain")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

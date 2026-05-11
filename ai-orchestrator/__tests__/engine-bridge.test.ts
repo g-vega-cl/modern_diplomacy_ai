@@ -109,13 +109,15 @@ describe("Engine Bridge", () => {
       expect(state.ok).toBe(true);
       expect(state.state.year).toBe(1901);
       expect(state.state.season).toBe("SPRING");
-      // Phase should be ORDER after reset (placement skipped)
-      expect(["ORDER", "RESOLUTION"]).toContain(state.state.phase);
+      // Phase should be PLACEMENT after reset (units are placed via submitPlacements)
+      expect(state.state.phase).toBe("PLACEMENT");
       expect(Object.keys(state.state.players)).toHaveLength(7);
-      expect(Object.keys(state.state.units).length).toBeGreaterThanOrEqual(21);
+      // No units yet — placements happen in a later step
+      expect(Object.keys(state.state.units).length).toBe(0);
     });
 
     it("has all 7 countries with correct unit counts", async () => {
+      await placeAllStandardUnits();
       const state = await call("getState");
       const players = state.state.players;
 
@@ -145,7 +147,7 @@ describe("Engine Bridge", () => {
 
   describe("Player view", () => {
     it("returns player-specific view with valid moves", async () => {
-      const resp = await call("reset");
+      await placeAllStandardUnits();
       const view = await call("getPlayerView", { playerId: "france" });
 
       expect(view.ok).toBe(true);
@@ -170,6 +172,8 @@ describe("Engine Bridge", () => {
     });
 
     it("has correct visibleUnits that include all powers", async () => {
+      // Place units first so visibleUnits is populated
+      await placeAllStandardUnits();
       const view = await call("getPlayerView", { playerId: "england" });
       const owners = new Set(
         view.view.visibleUnits.map((u: any) => u.ownerId)
@@ -183,7 +187,7 @@ describe("Engine Bridge", () => {
 
   describe("Orders and resolution", () => {
     it("submits orders and resolves them", async () => {
-      await call("reset");
+      await placeAllStandardUnits();
 
       // Submit orders for each player (all HOLD for simplicity)
       for (const pid of [
@@ -214,13 +218,14 @@ describe("Engine Bridge", () => {
     });
 
     it("resolves moves correctly (France moves to BUR, others hold)", async () => {
-      await call("reset");
+      await placeAllStandardUnits();
 
       // France: F BRE→MAO, A PAR→BUR, A MAR H
+      // IDs from submitPlacements: ${type}_${locationId}_${i}_${playerId}
       const franceOrders = [
-        { unitId: "F_BRE_0", type: "MOVE", targetLocationId: "MAO" },
-        { unitId: "A_PAR_1", type: "MOVE", targetLocationId: "BUR" },
-        { unitId: "A_MAR_2", type: "HOLD" },
+        { unitId: "F_BRE_0_france", type: "MOVE", targetLocationId: "MAO" },
+        { unitId: "A_PAR_1_france", type: "MOVE", targetLocationId: "BUR" },
+        { unitId: "A_MAR_2_france", type: "HOLD" },
       ];
       await call("submitOrders", { playerId: "france", orders: franceOrders });
 
@@ -247,7 +252,7 @@ describe("Engine Bridge", () => {
       );
       // MAO is empty sea, so F BRE→MAO should succeed
       const breMove = result.result.successfulMoves.find(
-        (m: any) => m.unitId === "F_BRE_0"
+        (m: any) => m.unitId === "F_BRE_0_france"
       );
       if (breMove) {
         expect(breMove.toLocationId).toBe("MAO");

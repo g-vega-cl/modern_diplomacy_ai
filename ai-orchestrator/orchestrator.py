@@ -387,9 +387,12 @@ New messages:
 
 {msgs_text}
 
-Should you respond? If so, write your message text (1-3 sentences, strategic, in character).
-If replying, you will respond in the same channel as the last message. 
+Should you respond? If so, write ONLY your in-character message text (1-3 sentences, strategic).
+If you reply, you will respond in the same channel as the last message.
 Or reply with just "PASS" to stay silent.
+
+IMPORTANT: Output ONLY the message text. Do NOT include reasoning, analysis, channel names,
+JSON, or any formatting — just the words your character would say.
 
 Your response:"""
         
@@ -405,6 +408,10 @@ Your response:"""
             return
         response = response.strip()
         if response.upper() == "PASS" or not response:
+            return
+        
+        response = self._sanitize_chat_message(response)
+        if not response:
             return
         
         channel_id = recent[-1][0]["id"] if recent else "global"
@@ -435,10 +442,9 @@ or probe another power's intentions. Be in character. 1-2 sentences.
 Available channels:
 {channel_list}
 
-IMPORTANT: Your reply must be EXACTLY two lines. First line: the channel ID you want to post in.
-Second line: your message. Example:
-global
-Greetings, fellow powers. France seeks peaceful cooperation in the west.
+IMPORTANT: Your reply must be EXACTLY two lines.
+First line: the channel ID you want to post in.
+Second line: ONLY your in-character message text — no reasoning, no JSON, no formatting.
 
 Your response:"""
             
@@ -466,6 +472,8 @@ Your response:"""
                 channel_id = "global"
                 message_text = lines[0].strip()
             
+            if message_text:
+                message_text = self._sanitize_chat_message(message_text)
             if message_text:
                 try:
                     self.bridge.chat_send(channel_id, self.player_id, self.country_name, message_text)
@@ -533,6 +541,89 @@ Choice:"""
         
         print(f"  ⚠ {self.country_name}: parse error. Raw: {text[:200]}", flush=True)
         return []
+
+    def _build_fallback_placements(self, valid_placements: list) -> list:
+        """Build fallback placements when the LLM returns empty.
+        Picks the first valid type for each unique location."""
+        if not valid_placements:
+            return []
+        result = []
+        seen = set()
+        for p in valid_placements:
+            loc = p.get("locationId", "")
+            if loc and loc not in seen:
+                result.append({"type": p.get("type", "A"),
+                               "locationId": loc})
+                seen.add(loc)
+        return result
+
+    @staticmethod
+    def _sanitize_chat_message(text) -> str:
+        """Clean LLM chat output before posting to a channel.
+
+        Handles:
+        - Meta-reasoning (e.g., "We need to decide: respond or PASS...")
+        - Raw JSON output (e.g., [{"channelId": "global", "content": "..."}])
+        - Self-invented channel prefixes (e.g., "Global Diplomacy — Country:")
+        - Markdown bold markers (**text**)
+        """
+        import re
+
+        if not text:
+            return ""
+        text = str(text).strip()
+
+        # If the whole message is a JSON array with content fields, extract content
+        if text.startswith("[{") or text.startswith("[ {"):
+            try:
+                import json as _json
+                parsed = _json.loads(text)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    first = parsed[0]
+                    if isinstance(first, dict) and "content" in first:
+                        text = first["content"].strip()
+            except Exception:
+                pass
+
+        # Strip any leading JSON fragment like [{"channelId": "global"}] that survived
+        text = re.sub(r'^\[.*?\]\s*', '', text)
+
+        # Strip markdown bold/strong markers
+        text = text.replace("**", "")
+
+        # Strip self-invented channel prefixes but KEEP the message body
+        # Patterns: "[Global Diplomacy — Country]: message", "Global Diplomacy — Country: message"
+        text = re.sub(
+            r'^\[?Global Diplomacy\s*[—\-:]\s*\w+\]?\s*[:\-]?\s*',
+            '', text, flags=re.IGNORECASE
+        )
+
+        # Strip meta-reasoning patterns
+        # Remove lines that are clearly internal deliberation
+        lines = text.split("\n")
+        cleaned = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            lower = stripped.lower()
+            # Skip lines of meta-reasoning
+            if any(phrase in lower for phrase in [
+                "we need to decide",
+                "respond or pass",
+                "should we respond",
+                "let me think",
+                "i should",
+                "i will respond",
+                "the last message",
+                "we are in the",
+                "we should reply",
+            ]):
+                continue
+            cleaned.append(stripped)
+
+        result = " ".join(cleaned).strip()
+        return result
 
 # ─── Orchestrator ───────────────────────────────────────────────────
 
@@ -631,7 +722,17 @@ class Orchestrator:
                     for p in placements:
                         print(f"      {p.get('type', '?')} at {p.get('locationId', '?')}")
                 else:
-                    print(f"  ⚠ {agent.country_name}: parse error, fallback needed")
+                    # LLM returned empty — use fallback: first valid type per location
+                    view = self.bridge.get_player_view(pid)
+                    valid = view.get("validPlacements", [])
+                    placements = agent._build_fallback_placements(valid)
+                    if placements:
+                        self.bridge.submit_placements(pid, placements)
+                        print(f"  ⚠ {agent.country_name}: fallback placements used")
+                        for p in placements:
+                            print(f"      {p.get('type', '?')} at {p.get('locationId', '?')}")
+                    else:
+                        print(f"  ⚠ {agent.country_name}: no valid placements available")
             except Exception as e:
                 print(f"  ❌ {agent.country_name}: {e}", flush=True)
     
