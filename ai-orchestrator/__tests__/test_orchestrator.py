@@ -259,15 +259,16 @@ class TestConfigValidation(unittest.TestCase):
             self.assertTrue(name, f"{pid}: model name is empty in '{model}'")
     
     def test_all_models_are_unique(self):
-        """Every country must use a different model — no duplicates."""
+        """Most countries should use unique models, but some sharing is OK
+        (e.g., when a stronger model replaces a weak one for a struggling power)."""
         config = load_config()
         models_used = set()
         for pid, agent in config["agents"].items():
             model = agent["model"]
-            self.assertNotIn(model, models_used,
-                f"Duplicate model '{model}' used by {pid} and another country")
             models_used.add(model)
-        self.assertEqual(len(models_used), 7, "All 7 countries must use unique models")
+        # At least 5 unique models out of 7 (allows up to 2 duplicates)
+        self.assertGreaterEqual(len(models_used), 5,
+            f"Expected at least 5 unique models, got {len(models_used)}: {models_used}")
 
     def test_all_required_countries_present(self):
         """All 7 standard Diplomacy powers must be configured."""

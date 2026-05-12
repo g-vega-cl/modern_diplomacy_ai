@@ -258,6 +258,36 @@ describe("Engine Bridge", () => {
         expect(breMove.toLocationId).toBe("MAO");
       }
     });
+
+    it("advances phase correctly after resolve (ORDER → FALL_ORDER for spring)", async () => {
+      await placeAllStandardUnits();
+
+      // All units HOLD
+      for (const pid of [
+        "england", "france", "germany", "italy",
+        "austria", "russia", "turkey",
+      ]) {
+        const view = await call("getPlayerView", { playerId: pid });
+        const playerUnits = view.view.player.units;
+        const orders = Object.keys(playerUnits).map((uid: string) => ({
+          unitId: uid,
+          type: "HOLD",
+        }));
+        await call("submitOrders", { playerId: pid, orders });
+      }
+
+      // Resolve: ORDER → RESOLUTION → FALL_ORDER (spring, no retreats)
+      const result = await call("resolve");
+      expect(result.ok).toBe(true);
+      expect(result.nextPhase).toBe("ORDER"); // Fall ORDER phase
+      expect(result.winner).toBeNull();
+
+      // Verify the state reflects the advance
+      const state = await call("getState");
+      expect(state.state.phase).toBe("ORDER");
+      expect(state.state.season).toBe("FALL");
+      expect(state.state.year).toBe(1901);
+    });
   });
 
   describe("Chat", () => {

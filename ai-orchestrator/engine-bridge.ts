@@ -218,7 +218,10 @@ rl.on("line", (line: string) => {
         nextState = { ...nextState, units: nextUnits, retreatsNeeded };
 
         const winner = VictoryChecker.checkVictory(nextState.players);
-        state = GameStateMachine.advancePhase(nextState);
+        // Advance past RESOLUTION: ORDER → RESOLUTION → RETREAT/BUILD/FALL_ORDER
+        let advancedState = GameStateMachine.advancePhase(nextState);
+        advancedState = GameStateMachine.advancePhase(advancedState);
+        state = advancedState;
 
         process.stdout.write(respond(id, {
           result: {

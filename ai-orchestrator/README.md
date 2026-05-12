@@ -84,6 +84,10 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │  4. Window closes, each agent generates orders       │
 │  5. All orders submitted simultaneously to engine    │
 │  6. Engine resolves (supports, combat, standoffs)   │
+│     → RESOLUTION is an internal phase; the bridge   │
+│       auto-advances to RETREAT/BUILD/next ORDER     │
+│     → Same-power duplicate destination moves are    │
+│       detected and both units bounce               │
 ├─────────────────────────────────────────────────────┤
 │ RETREAT (if any units dislodged)                    │
 │  7. Each dislodged unit retreats or disbands        │
@@ -140,7 +144,7 @@ Current lineup in `agents.json`:
 | England | `deepseek/deepseek-v4-flash` |
 | France | `qwen/qwen3.6-flash` |
 | Germany | `nvidia/nemotron-3-super-120b-a12b` |
-| Italy | `stepfun/step-3.5-flash` |
+| Italy | `deepseek/deepseek-v4-flash` |
 | Austria | `minimax/minimax-m2.5` |
 | Russia | `xiaomi/mimo-v2-flash` |
 | Turkey | `openai/gpt-5.4-nano` |

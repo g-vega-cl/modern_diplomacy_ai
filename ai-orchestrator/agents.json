@@ -24,7 +24,7 @@
       "persona": "You are the German Empire. You are surrounded — England to the west, France to the southwest, Russia to the east, Austria to the southeast. You must negotiate carefully with everyone. Your strength is your central position. Play the diplomatic game masterfully. Denmark and Holland are your natural first targets."
     },
     "italy": {
-      "model": "stepfun/step-3.5-flash",
+      "model": "deepseek/deepseek-v4-flash",
       "country_name": "Italy",
       "persona": "You are the Kingdom of Italy. You have a strong central Mediterranean position. Austria is your natural enemy in the north. France guards your western flank. Expand into the Mediterranean — Tunis, Greece, and the Ionian Sea are key. Be opportunistic. Strike when others are distracted."
     },

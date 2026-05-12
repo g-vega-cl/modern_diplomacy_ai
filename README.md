@@ -184,6 +184,7 @@ Multi-coast provinces: **Spain**, **St. Petersburg**, **Bulgaria** — fleet mov
 | Army landing | Sea→coast via convoy | Sea→coast succeeds only if target is empty and uncontested |
 | Sea combat | Support-based | Fleet auto-defeats army (overrides all strength) |
 | Convoys | Required for amphibious | Not implemented (simplified) |
+| Same-power duplicate | Illegal (units hold) | Detected; both units bounce with combat log |
 | Draws | Supported | Solo victory only |
 
 All standard mechanics implemented: simultaneous resolution, support/hold/move, support cutting (with beleaguered garrison exception), direct swap detection, multi-way standoffs, dislodgement and retreat, fall SC ownership transfer, build/disband.
@@ -191,7 +192,7 @@ All standard mechanics implemented: simultaneous resolution, support/hold/move, 
 ### Development
 
 ```bash
-pnpm test          # 126 TypeScript tests (80 engine + 32 negotiation + 14 bridge)
+pnpm test          # 127 TypeScript tests (80 engine + 32 negotiation + 15 bridge)
 pnpm test:watch    # Watch mode
 pnpm play          # Terminal CLI (human vs human)
 pnpm build         # TypeScript check
@@ -310,7 +311,7 @@ ai-orchestrator/
 ```
 
 ```bash
-pnpm test              # 126 tests (80 engine + 32 negotiation + 14 bridge)
+pnpm test              # 127 tests (80 engine + 32 negotiation + 15 bridge)
 python3 ai-orchestrator/__tests__/test_orchestrator.py  # 37 Python tests
 ```
 

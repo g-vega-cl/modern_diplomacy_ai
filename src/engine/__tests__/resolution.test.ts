@@ -168,7 +168,7 @@ describe("ResolutionEngine", () => {
       expect(result.bouncedMoves).toContainEqual({ unitId: "A_YOR", attemptedLocationId: "LON" });
     });
 
-    it("fleet defeats army when both move into same sea (§8.2)", () => {
+    it("same-power duplicate destination: both bounce (Diplomacy rule)", () => {
       const state = createTestState(
         ["ENG", "NTH", "LON"],
         [A("A_LON", "england", "LON"), F("F_NTH", "england", "NTH")],
@@ -176,7 +176,8 @@ describe("ResolutionEngine", () => {
       );
       const result = ResolutionEngine.resolve(state);
       expect(result.bouncedMoves).toContainEqual({ unitId: "A_LON", attemptedLocationId: "ENG" });
-      expect(result.successfulMoves).toContainEqual({ unitId: "F_NTH", fromLocationId: "NTH", toLocationId: "ENG" });
+      expect(result.bouncedMoves).toContainEqual({ unitId: "F_NTH", attemptedLocationId: "ENG" });
+      expect(result.successfulMoves.length).toBe(0);
     });
 
     it("army landing blocked by incoming competing move (§8.3)", () => {
@@ -199,18 +200,19 @@ describe("ResolutionEngine", () => {
       expect(result.successfulMoves).toContainEqual({ unitId: "A_LON", fromLocationId: "LON", toLocationId: "ENG" });
     });
 
-    it("fleet tie vs army in sea: army dislodged, fleets bounce", () => {
+    it("same-power fleets to same sea: both bounce, defender stays", () => {
       const state = createTestState(
         ["ENG", "NTH", "WAL"],
         [A("A_ENG", "france", "ENG"), F("F_NTH", "england", "NTH"), F("F_WAL", "england", "WAL")],
         [HOLD("A_ENG"), MOVE("F_NTH", "ENG"), MOVE("F_WAL", "ENG")],
       );
       const result = ResolutionEngine.resolve(state);
-      expect(result.dislodgedUnits).toContainEqual(
-        expect.objectContaining({ unitId: "A_ENG" }),
-      );
+      // Same-power duplicate destination check bounces both england fleets
+      expect(result.dislodgedUnits.length).toBe(0);
       expect(result.successfulMoves.length).toBe(0);
       expect(result.bouncedMoves.length).toBe(2);
+      expect(result.bouncedMoves).toContainEqual({ unitId: "F_NTH", attemptedLocationId: "ENG" });
+      expect(result.bouncedMoves).toContainEqual({ unitId: "F_WAL", attemptedLocationId: "ENG" });
     });
   });
 
@@ -225,15 +227,18 @@ describe("ResolutionEngine", () => {
       expect(result.successfulMoves).toContainEqual({ unitId: "A_BER", fromLocationId: "BER", toLocationId: "SIL" });
     });
 
-    it("three-way standoff results in all bouncing", () => {
+    it("two same-power + one other attacker: same-power bounce, third succeeds", () => {
       const state = createTestState(
         ["PAR", "BUR", "MAR", "MUN"],
         [A("A_PAR", "france", "PAR"), A("A_MAR", "france", "MAR"), A("A_MUN", "germany", "MUN")],
         [MOVE("A_PAR", "BUR"), MOVE("A_MAR", "BUR"), MOVE("A_MUN", "BUR")],
       );
       const result = ResolutionEngine.resolve(state);
-      expect(result.bouncedMoves.length).toBe(3);
-      expect(result.successfulMoves.length).toBe(0);
+      // A_PAR and A_MAR bounce (same-power duplicate destination),
+      // then A_MUN (germany) attacks unopposed and succeeds
+      expect(result.bouncedMoves.length).toBe(2);
+      expect(result.successfulMoves.length).toBe(1);
+      expect(result.successfulMoves).toContainEqual({ unitId: "A_MUN", fromLocationId: "MUN", toLocationId: "BUR" });
     });
   });
 

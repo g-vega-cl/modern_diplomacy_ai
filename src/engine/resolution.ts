@@ -55,6 +55,33 @@ export class ResolutionEngine {
       combatLog.push(id + " bounced (direct swap)");
     }
 
+    // Detect same-power same-destination moves (illegal in Diplomacy)
+    // Both units bounce
+    {
+      const destByPower = new Map<string, Map<string, string[]>>();
+      for (const [unitId, info] of moveOrders) {
+        if (directSwaps.has(unitId) || usedUnits.has(unitId)) continue;
+        const unit = state.units.get(unitId);
+        if (!unit) continue;
+        let byDest = destByPower.get(unit.ownerId);
+        if (!byDest) { byDest = new Map(); destByPower.set(unit.ownerId, byDest); }
+        let ids = byDest.get(info.to);
+        if (!ids) { ids = []; byDest.set(info.to, ids); }
+        ids.push(unitId);
+      }
+      for (const [, byDest] of destByPower) {
+        for (const [dest, ids] of byDest) {
+          if (ids.length >= 2) {
+            for (const id of ids) {
+              bouncedMoves.push({ unitId: id, attemptedLocationId: dest });
+              usedUnits.add(id);
+              combatLog.push(id + " bounced (same-power duplicate destination " + dest + ")");
+            }
+          }
+        }
+      }
+    }
+
     // Build attacks per province
     const attacksOnProvince = new Map<string, Array<{ unitId: string; fromId: string; strength: number }>>();
     for (const [unitId, info] of moveOrders) {
