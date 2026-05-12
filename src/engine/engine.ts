@@ -203,6 +203,19 @@ export class DiplomacyEngine {
         `Supply centers: ${player.supplyCenterCount}, units: ${player.units.size}`
       );
     }
+
+    // ── Validate CREATE locations are unoccupied (§BUG 3 fix) ──
+    for (const build of creates) {
+      if (!build.locationId) continue;
+      // Check if any unit (any player) already occupies this location
+      for (const unit of state.units.values()) {
+        if (unit.locationId === build.locationId) {
+          throw new Error(
+            `Cannot build in ${build.locationId}: already occupied by ${unit.id}`
+          );
+        }
+      }
+    }
     // ─────────────────────────────────────────────────────
 
     const nextUnits = new Map(state.units);
@@ -210,7 +223,11 @@ export class DiplomacyEngine {
 
     for (const build of builds) {
       if (build.type === "CREATE") {
-        const unitId = `${build.unitType}_${build.locationId}`;
+        // Use a unique counter-based suffix to avoid ID collisions
+        const locationId = build.locationId || "";
+        const playerUnits = nextPlayers.get(playerId)?.units || player.units;
+        const buildIdx = playerUnits.size + 1;
+        const unitId = `${build.unitType}_${locationId}_${buildIdx}_${playerId}`;
         const unit: Unit = {
           id: unitId,
           type: build.unitType || UnitType.ARMY,

@@ -452,6 +452,51 @@ Respond with JSON array only."""
                 return placements
         
         return []
+
+    def generate_builds(self, delta: int, valid_builds: list) -> list:
+        """Use the tool-based flow to generate build orders via validated tool calls."""
+        from agent_tools import AgentTools
+
+        tools = AgentTools(self.player_id, self.bridge)
+
+        state_text = self._get_state_text()
+
+        if delta > 0:
+            action_desc = f"You are the {self.country_name}. Build EXACTLY {delta} new unit(s)."
+            action_verb = "CREATE"
+        else:
+            action_desc = f"You are the {self.country_name}. Disband EXACTLY {abs(delta)} unit(s)."
+            action_verb = "DESTROY"
+
+        initial_prompt = f"""{state_text}
+
+{action_desc}
+Available build locations: {', '.join(valid_builds) if valid_builds else 'none available'}
+
+Use the available tools to explore the board and submit your builds.
+1. Call get_my_units to see your current forces
+2. Call get_valid_builds to see where you can build (or get_supply_centers)
+3. For each build needed, call submit_build with action={action_verb}
+4. When done, call finalize_builds
+
+Strategic notes:
+- Choose Army (A) or Fleet (F) based on your strategic needs
+- Fleets can only be built in COASTAL centers — check can_build_fleet in get_valid_builds
+- DESTROY removes a unit from the board — pick your least useful unit"""
+
+        self.llm.chat_with_tools(
+            model=self.model,
+            messages=[{"role": "user", "content": initial_prompt}],
+            tools=AgentTools.build_definitions(),
+            tool_handler=tools.dispatch,
+            system=self.system_prompt,
+            temperature=0.3,
+            max_tokens=1000,
+            max_turns=15,
+            fallback_model=self.fallback_model,
+        )
+
+        return tools.get_builds()
     
     def negotiate(self, max_msgs: int):
         """Run negotiation loop in a thread."""
@@ -1012,8 +1057,21 @@ class Orchestrator:
                 self.bridge.submit_orders(pid, orders)
                 print(f"  ✓ {agent.country_name}: {len(orders)} orders")
                 for o in orders:
-                    tgt = o.get("targetLocationId") or o.get("supportTargetLocationId") or ""
-                    print(f"      {o.get('unitId')}: {o.get('type')}{' → ' + tgt if tgt else ''}")
+                    uid = o.get('unitId')
+                    otype = o.get('type')
+                    if otype == 'MOVE':
+                        tgt = o.get('targetLocationId', '?')
+                        print(f"      {uid}: MOVE → {tgt}")
+                    elif otype == 'SUPPORT':
+                        sup_u = o.get('supportUnitId', '?')
+                        sup_ot = o.get('supportOrderType', '?')
+                        sup_tgt = o.get('supportTargetLocationId', '')
+                        if sup_ot == 'MOVE' and sup_tgt:
+                            print(f"      {uid}: SUPPORT {sup_u} MOVE → {sup_tgt}")
+                        else:
+                            print(f"      {uid}: SUPPORT {sup_u} {sup_ot}")
+                    else:
+                        print(f"      {uid}: {otype}")
             except Exception as e:
                 print(f"  ❌ {agent.country_name}: {e}", flush=True)
     
@@ -1049,7 +1107,7 @@ class Orchestrator:
     
     def _run_build_phase(self, state: dict):
         print(f"\n  🏗 BUILD PHASE")
-        
+
         for pid, agent in self.agents.items():
             try:
                 view = self.bridge.get_player_view(pid)
@@ -1059,40 +1117,23 @@ class Orchestrator:
                 unit_count = len(units)
                 delta = sc_count - unit_count
                 valid_builds = view.get("validBuilds", [])
-                
+
                 if delta == 0:
                     continue
-                
-                state_text = agent._get_state_text()
-                
+
                 if delta > 0:
                     print(f"  {agent.country_name}: +{delta} in {valid_builds}")
-                    base_prompt = f"""{state_text}
-
-Build EXACTLY {delta} unit(s) in open home centers: {', '.join(valid_builds)}
-
-You MUST output exactly {delta} CREATE entries — no more, no less.
-Format: [{{"type": "CREATE", "unitType": "A", "locationId": "PAR"}}, ...]
-UnitType: "A" for Army, "F" for Fleet.
-Respond with JSON array only."""
                 else:
                     print(f"  {agent.country_name}: disband {abs(delta)}")
-                    base_prompt = f"""{state_text}
 
-Disband EXACTLY {abs(delta)} unit(s). Your units: {', '.join(f'{uid}@{u.get("locationId")}' for uid, u in units.items())}
+                builds = agent.generate_builds(delta, valid_builds)
 
-You MUST output exactly {abs(delta)} DESTROY entries — no more, no less.
-Format: [{{"type": "DESTROY", "locationId": "PAR"}}, ...]
-Respond with JSON array only."""
-                
-                builds = self._get_builds_with_retry(agent, base_prompt, delta, valid_builds, units)
-                
                 if builds:
                     self.bridge.submit_build(pid, builds)
                     for b in builds:
                         print(f"    {b.get('type')}: {b.get('unitType', '')} {b.get('locationId', '')}")
                 else:
-                    # Final fallback: auto-pick first N valid builds
+                    # Fallback: auto-pick first N valid builds or units to destroy
                     if delta > 0 and valid_builds:
                         builds = [
                             {"type": "CREATE", "unitType": "A", "locationId": valid_builds[i]}
@@ -1114,43 +1155,14 @@ Respond with JSON array only."""
                             print(f"    {b.get('type')}: {b.get('locationId', '')}")
             except Exception as e:
                 print(f"  ⚠ {agent.country_name} build err: {e}")
-    
+
+    # _get_builds_with_retry is no longer used — kept for compatibility
     def _get_builds_with_retry(self, agent, base_prompt: str, delta: int,
                                 valid_builds: list, units: dict) -> list:
-        """Get builds from LLM with count validation and one retry."""
-        for attempt in range(2):
-            prompt = base_prompt
-            if attempt > 0:
-                count = delta if delta > 0 else abs(delta)
-                prompt += (
-                    f"\n\n⚠️ CRITICAL: You must output EXACTLY {count} entries. "
-                    "NO more, NO less. Your previous response had the wrong number.\n"
-                    "Output ONLY a JSON array. Start with '[' and end with ']'.\n"
-                )
-            
-            response = agent.llm.chat(
-                model=agent.model,
-                messages=[{"role": "user", "content": prompt}],
-                system=agent.system_prompt,
-                temperature=0.3,
-                max_tokens=500,
-                fallback_model=agent.fallback_model,
-            )
-            
-            builds = agent._parse_json(response)
-            if not builds:
-                continue
-            
-            # Validate count
-            expected = delta if delta > 0 else abs(delta)
-            actual_type = "CREATE" if delta > 0 else "DESTROY"
-            actual_count = sum(1 for b in builds if b.get("type") == actual_type)
-            
-            if actual_count == expected:
-                return builds
-            
-            print(f"  ⚠ {agent.country_name}: got {actual_count} {actual_type}(s), expected {expected} — retrying")
-        
+        """DEPRECATED: Use generate_builds() instead. Kept for test compatibility."""
+        builds = agent.generate_builds(delta, valid_builds)
+        if builds:
+            return builds
         return []
     
     def _show_resolution(self, result: dict):

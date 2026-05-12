@@ -19,8 +19,8 @@ python3 ai-orchestrator/orchestrator.py
 
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
-pnpm test                          # 128 tests: 112 engine + 16 bridge
-python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 75 orchestrator tests
+pnpm test                          # 131 tests: 114 engine + 17 bridge
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 87 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -35,7 +35,7 @@ orchestrator.py (Python, stdlib only)
 │     └── OpenRouter API → LLM models (Claude, GPT-4o, Gemini, etc.)
 │           └── Tool-calling loop: agents explore state via validated tools
 │               before submitting orders (ORDER phase)
-├── AgentTools → validates orders at call time, buffers submissions
+├── AgentTools → validates orders AND builds at call time, buffers submissions
 ├── LLMClient → chat_with_tools() multi-turn tool loop + plain chat()
 └── EngineBridge (subprocess)
       └── npx tsx engine-bridge.ts → DiplomacyEngine (TypeScript)
@@ -58,6 +58,24 @@ Instead of receiving a text dump and being told to "output JSON only", agents no
 
 Validation happens at tool-call time — if an agent tries to move to an invalid territory or submit orders for an enemy unit, the tool returns an error immediately. The agent can self-correct in the same conversation turn. No JSON parsing, no retry prompts, no format-scolding.
 
+### BUILD Phase: Tool-Based Submission
+
+The build phase also uses the tool-calling API with validated tools (as of May 2026):
+
+| Tool | Purpose |
+|------|---------|
+| `get_my_units` | List agent's current units (type, location) |
+| `get_valid_builds` | Open home centers with province types and fleet eligibility |
+| `get_supply_centers` | Supply center ownership info |
+| `submit_build` | CREATE a unit in an open home center, or DESTROY an existing unit |
+| `cancel_build` | Remove a previously submitted build action |
+| `finalize_builds` | Signal completion (validates correct number of builds vs SC delta) |
+
+Build validation is multi-layered:
+- **Tool level**: `submit_build` rejects invalid locations, duplicate builds in the same center, bad unit types, and DESTROY targeting enemy units
+- **Engine level**: `submitBuild()` rejects CREATE in already-occupied locations and enforces build count limits
+- **Bridge level**: Unit locations are synced between top-level and player-level maps so board display always reflects post-resolution positions
+
 ### Engine Bridge Protocol
 
 The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object on stdin, response on stdout.
@@ -66,7 +84,7 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 | Method | Params | Returns |
 |--------|--------|---------|
 | `reset` | — | `{}` |
-| `getState` | — | `{state: {year, season, phase, players, units, retreatsNeeded, supplyCenterOwners}}` |
+| `getState` | — | `{state: {year, season, phase, players, units, retreatsNeeded, provinces, supplyCenterOwners}}` |
 | `getPlayerView` | `{playerId}` | `{view: {player, visibleUnits, validMoves, validBuilds, validPlacements}}` |
 | `submitPlacements` | `{playerId, placements}` | `{}` |
 | `submitOrders` | `{playerId, orders}` | `{}` |
@@ -126,8 +144,14 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │     sitting on a SC claims it; empty SCs keep        │
 │     previous owner (tracked per-center, not just     │
 │     incrementing). Delta (SCs - units): build or     │
-│     disband. Build count is validated by engine       │
-│     and orchestrator with retry + auto-fallback.     │
+│     disband.                                       │
+│  9. Each agent enters tool loop:                     │
+│     → calls get_my_units, get_valid_builds           │
+│     → submits builds via submit_build tool           │
+│     → validates at call time (location, type, count)│
+│     → calls finalize_builds when done               │
+│     → Engine also rejects occupied locations        │
+│     → Auto-fallback picks first N valid centers     │
 ├─────────────────────────────────────────────────────┤
 │ NEXT YEAR (repeat until 18 SCs or max years)        │
 └─────────────────────────────────────────────────────┘
@@ -224,12 +248,12 @@ This ensures agents know they can HOLD or SUPPORT even when no move destinations
 | File | Purpose |
 |------|---------|
 | `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry + tool-calling loop), EngineBridge |
-| `agent_tools.py` | Tool definitions + AgentTools dispatcher: validates and buffers orders for the ORDER phase |
+| `agent_tools.py` | Tool definitions + dispatcher: validates and buffers orders (ORDER phase) and builds (BUILD phase) |
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
 | `agents.json` | Country → OpenRouter model + persona + fallback_model + game settings |
-| `__tests__/engine-bridge.test.ts` | 16 tests for the JSON-line bridge protocol |
+| `__tests__/engine-bridge.test.ts` | 17 tests for the JSON-line bridge protocol (including board sync) |
 | `__tests__/test_orchestrator.py` | 55 tests: config, parsing, prompts, fallback model, chat sanitization, board display, state text, tool-based order generation |
-| `__tests__/test_agent_tools.py` | 18 tests for all tool methods + input validation |
+| `__tests__/test_agent_tools.py` | 32 tests for all tool methods (20 order + 12 build) + input validation |
 | `__tests__/test_tool_client.py` | 2 tests for the chat_with_tools tool-calling loop |
 
 ## Troubleshooting
@@ -247,12 +271,13 @@ Make sure `pnpm install` has been run in the repo root. The bridge needs `tsx` (
 The orchestrator has multiple fallback and retry layers:
 
 1. **Tool-based validation (ORDER phase)**: Agents submit orders via validated tool calls. Invalid moves or enemy units are rejected at call time with clear error messages — the agent self-corrects in the same turn. No JSON parsing needed for orders.
-2. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically.
-3. **HOLD fallback (ORDER phase)**: If the tool loop produces no orders (exhausted max_turns, unresponsive model), all units default to HOLD.
-4. **Parse retry (placement/build phases)**: If the LLM response isn't valid JSON, the prompt is retried once with a formatting warning. These phases still use the text-to-JSON approach.
-5. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
-6. **Build count validation**: The engine enforces that CREATE orders don't exceed the supply center surplus, and DESTROY orders don't exceed the deficit. The orchestrator validates count pre-submission and retries once on mismatch. If both attempts fail, an auto-fallback picks the first N valid home centers.
-7. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
+2. **Tool-based validation (BUILD phase)**: Agents submit builds via validated tool calls. Invalid locations, duplicate builds, wrong counts, and bad unit types are rejected at call time. Engine also enforces occupancy validation — no two units in the same tile.
+3. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically.
+4. **HOLD fallback (ORDER phase)**: If the tool loop produces no orders (exhausted max_turns, unresponsive model), all units default to HOLD.
+5. **Parse retry (placement phase only)**: If the LLM response isn't valid JSON, the prompt is retried once with a formatting warning. Placement is the only remaining JSON-based phase.
+6. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
+7. **Build fallback**: If the tool loop produces no builds, an auto-fallback picks the first N valid home centers (for CREATE) or disbands the first N units (for DESTROY).
+8. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
 
 Check the stderr output for the raw LLM response if debugging is needed.
 

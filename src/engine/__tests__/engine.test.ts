@@ -177,4 +177,54 @@ describe("DiplomacyEngine", () => {
       expect(engLocations).toContain("LVP");
     });
   });
+
+  describe("Build phase", () => {
+    it("submitBuild rejects CREATE in occupied location (§BUG 3)", () => {
+      const engine = new DiplomacyEngine();
+      const state = engine.createGame(standardPlacements());
+      // France already has a unit in PAR from standard placements
+      expect(() =>
+        engine.submitBuild(state, "france", [
+          { playerId: "france", type: "CREATE", unitType: UnitType.ARMY, locationId: "PAR" },
+        ])
+      ).toThrow("already occupied");
+    });
+
+    it("submitBuild creates unit with unique counter-based ID", () => {
+      const engine = new DiplomacyEngine();
+      const state = engine.createGame(standardPlacements());
+
+      // Move France's PAR unit to BUR so PAR is vacant for build
+      const nextUnits = new Map(state.units);
+      const parUnit = [...nextUnits.values()].find(
+        u => u.ownerId === "france" && u.locationId === "PAR"
+      );
+      if (parUnit) {
+        nextUnits.set(parUnit.id, { ...parUnit, locationId: "BUR" });
+      }
+      const nextPlayers = new Map(state.players);
+      const france = nextPlayers.get("france")!;
+      const franceUnits = new Map(france.units);
+      if (parUnit) {
+        franceUnits.set(parUnit.id, { ...parUnit, locationId: "BUR" });
+      }
+      nextPlayers.set("france", {
+        ...france,
+        units: franceUnits,
+        supplyCenterCount: 4,
+      });
+
+      const modifiedState = { ...state, units: nextUnits, players: nextPlayers };
+
+      const next = engine.submitBuild(modifiedState, "france", [
+        { playerId: "france", type: "CREATE", unitType: UnitType.ARMY, locationId: "PAR" },
+      ]);
+
+      const newUnit = [...next.units.values()].find(
+        u => u.ownerId === "france" && u.locationId === "PAR"
+      );
+      expect(newUnit).toBeDefined();
+      expect(newUnit!.id).toMatch(/^A_PAR_\d+_france$/);
+    });
+  });
 });

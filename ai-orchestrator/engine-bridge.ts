@@ -122,9 +122,14 @@ function serializeState(s: GameState) {
       locationId: u.locationId, mustRetreat: u.mustRetreat,
     };
   }
+  const provinces: Record<string, any> = {};
+  for (const [id, p] of s.provinces) {
+    provinces[id] = { id: p.id, type: p.type, isSupplyCenter: p.isSupplyCenter };
+  }
   return {
     year: s.year, season: s.season, phase: s.phase,
     players, units, retreatsNeeded: s.retreatsNeeded,
+    provinces, supplyCenterOwners: Object.fromEntries(s.supplyCenterOwners),
   };
 }
 
@@ -220,7 +225,29 @@ rl.on("line", (line: string) => {
             retreatsNeeded.push(d.unitId);
           }
         }
-        nextState = { ...nextState, units: nextUnits, retreatsNeeded };
+
+        // Propagate unit location changes to player-level unit maps
+        const nextPlayers = new Map(nextState.players);
+        for (const [pid, p] of nextPlayers) {
+          let changed = false;
+          const playerUnits = new Map(p.units);
+          for (const [uid, u] of playerUnits) {
+            const updated = nextUnits.get(uid);
+            if (updated && updated.locationId !== u.locationId) {
+              playerUnits.set(uid, updated);
+              changed = true;
+            }
+            if (updated && updated.mustRetreat !== u.mustRetreat) {
+              playerUnits.set(uid, updated);
+              changed = true;
+            }
+          }
+          if (changed) {
+            nextPlayers.set(pid, { ...p, units: playerUnits });
+          }
+        }
+
+        nextState = { ...nextState, units: nextUnits, players: nextPlayers, retreatsNeeded };
 
         const winner = VictoryChecker.checkVictory(nextState.players);
         // Advance past RESOLUTION: ORDER → RESOLUTION → RETREAT/BUILD/FALL_ORDER

@@ -309,6 +309,45 @@ describe("Engine Bridge", () => {
       expect(state.state.season).toBe("FALL");
       expect(state.state.year).toBe(1901);
     });
+
+    it("board display syncs unit locations after successful moves (§BUG 1)", async () => {
+      await placeAllStandardUnits();
+
+      // France moves F BRE→MAO, A PAR→BUR, A MAR HOLD
+      const franceOrders = [
+        { unitId: "F_BRE_0_france", type: "MOVE", targetLocationId: "MAO" },
+        { unitId: "A_PAR_1_france", type: "MOVE", targetLocationId: "BUR" },
+        { unitId: "A_MAR_2_france", type: "HOLD" },
+      ];
+      await call("submitOrders", { playerId: "france", orders: franceOrders });
+
+      // Everyone else holds
+      for (const pid of ["england", "germany", "italy", "austria", "russia", "turkey"]) {
+        const view = await call("getPlayerView", { playerId: pid });
+        const playerUnits = view.view.player.units;
+        const orders = Object.keys(playerUnits).map((uid: string) => ({
+          unitId: uid,
+          type: "HOLD",
+        }));
+        await call("submitOrders", { playerId: pid, orders });
+      }
+
+      const result = await call("resolve");
+      expect(result.ok).toBe(true);
+
+      // Get state AFTER resolution — player-level units must be synced
+      const state = await call("getState");
+      const francePlayer = state.state.players.france;
+
+      // The unit IDs should still exist
+      expect(francePlayer.units["F_BRE_0_france"]).toBeDefined();
+      expect(francePlayer.units["A_PAR_1_france"]).toBeDefined();
+
+      // Their locations MUST reflect the resolution (not original positions)
+      expect(francePlayer.units["F_BRE_0_france"].locationId).toBe("MAO");
+      expect(francePlayer.units["A_PAR_1_france"].locationId).toBe("BUR");
+      expect(francePlayer.units["A_MAR_2_france"].locationId).toBe("MAR"); // held
+    });
   });
 
   describe("Chat", () => {

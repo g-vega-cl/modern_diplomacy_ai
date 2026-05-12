@@ -12,7 +12,7 @@ class FakeBridge:
     """Minimal fake for EngineBridge — returns canned game state."""
     def __init__(self):
         self.state = {
-            "year": 1901, "season": "SPRING", "phase": "ORDER",
+            "year": 1901, "season": "FALL", "phase": "BUILD",
             "players": {
                 "france": {
                     "id": "france", "name": "France",
@@ -45,6 +45,14 @@ class FakeBridge:
                 "PAR": "france", "MAR": "france", "BRE": "france",
                 "BER": "germany", "KIE": "germany", "MUN": "germany",
             },
+            "provinces": {
+                "PAR": {"id": "PAR", "type": "LAND", "isSupplyCenter": True},
+                "MAR": {"id": "MAR", "type": "COAST", "isSupplyCenter": True},
+                "BRE": {"id": "BRE", "type": "COAST", "isSupplyCenter": True},
+                "BER": {"id": "BER", "type": "COAST", "isSupplyCenter": True},
+                "KIE": {"id": "KIE", "type": "COAST", "isSupplyCenter": True},
+                "MUN": {"id": "MUN", "type": "LAND", "isSupplyCenter": True},
+            },
             "retreatsNeeded": [],
         }
         self.valid_moves = {
@@ -52,7 +60,9 @@ class FakeBridge:
             "A_MAR_1_france": ["PIE", "GAS", "BUR", "SPA"],
             "F_BRE_2_france": ["MAO", "ENG", "PIC", "GAS"],
         }
+        self.valid_builds = ["PAR", "MAR", "BRE"]  # default: all home SCs open
         self.submitted_orders = []
+        self.submitted_builds = []
 
     def get_state(self):
         return self.state
@@ -66,12 +76,16 @@ class FakeBridge:
                 uid: moves for uid, moves in self.valid_moves.items()
                 if uid in player.get("units", {})
             },
-            "validBuilds": [],
+            "validBuilds": self.valid_builds,
             "validPlacements": [],
         }
 
     def submit_orders(self, player_id, orders):
         self.submitted_orders.append((player_id, orders))
+        return {}
+
+    def submit_build(self, player_id, builds):
+        self.submitted_builds.append((player_id, builds))
         return {}
 
 
@@ -222,3 +236,135 @@ class TestAgentTools(unittest.TestCase):
         result = self.tools.dispatch("nonexistent_tool", {})
         self.assertIn("error", result)
         self.assertEqual(result["error"], "Unknown tool: nonexistent_tool")
+
+    # ── Build tools ─────────────────────────────────────────────
+
+    def test_build_definitions_returns_list(self):
+        defs = AgentTools.build_definitions()
+        self.assertIsInstance(defs, list)
+        self.assertGreater(len(defs), 3)
+        names = [d["function"]["name"] for d in defs]
+        self.assertIn("get_valid_builds", names)
+        self.assertIn("submit_build", names)
+        self.assertIn("finalize_builds", names)
+
+    def test_get_valid_builds_enriched_with_province_info(self):
+        result = self.tools.dispatch("get_valid_builds", {})
+        self.assertIn("valid_builds", result)
+        self.assertGreaterEqual(result["count"], 1)
+        par = next(b for b in result["valid_builds"] if b["location"] == "PAR")
+        self.assertEqual(par["province_type"], "LAND")
+        self.assertTrue(par["can_build_army"])
+        self.assertFalse(par["can_build_fleet"])  # LAND provinces can't have fleets
+        mar = next(b for b in result["valid_builds"] if b["location"] == "MAR")
+        self.assertEqual(mar["province_type"], "COAST")
+        self.assertTrue(mar["can_build_fleet"])
+
+    def test_submit_build_create_succeeds(self):
+        result = self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "A",
+        })
+        self.assertTrue(result["ok"])
+        build = result["build"]
+        self.assertEqual(build["type"], "CREATE")
+        self.assertEqual(build["unitType"], "A")
+        self.assertEqual(build["locationId"], "PAR")
+
+    def test_submit_build_create_rejects_invalid_location(self):
+        result = self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "MARS", "unit_type": "A",
+        })
+        self.assertFalse(result["ok"])
+        self.assertIn("not a valid build location", result["error"])
+
+    def test_submit_build_create_rejects_duplicate_location(self):
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "A",
+        })
+        result = self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "F",
+        })
+        self.assertFalse(result["ok"])
+        self.assertIn("Already submitted", result["error"])
+
+    def test_submit_build_create_rejects_bad_unit_type(self):
+        result = self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "X",
+        })
+        self.assertFalse(result["ok"])
+        self.assertIn("unit_type", result["error"].lower())
+
+    def test_submit_build_destroy_succeeds(self):
+        result = self.tools.dispatch("submit_build", {
+            "action": "DESTROY", "location_id": "PAR",
+        })
+        self.assertTrue(result["ok"])
+        build = result["build"]
+        self.assertEqual(build["type"], "DESTROY")
+        self.assertEqual(build["locationId"], "PAR")
+
+    def test_submit_build_destroy_rejects_location_without_own_unit(self):
+        result = self.tools.dispatch("submit_build", {
+            "action": "DESTROY", "location_id": "BER",
+        })
+        self.assertFalse(result["ok"])
+        self.assertIn("No unit of yours", result["error"])
+
+    def test_cancel_build_removes_pending(self):
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "A",
+        })
+        self.assertEqual(len(self.tools.get_builds()), 1)
+        result = self.tools.dispatch("cancel_build", {"location_id": "PAR"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(self.tools.get_builds()), 0)
+
+    def test_cancel_build_nonexistent(self):
+        result = self.tools.dispatch("cancel_build", {"location_id": "PAR"})
+        self.assertFalse(result["ok"])
+        self.assertIn("No pending build", result["error"])
+
+    def test_finalize_builds_fails_wrong_create_count(self):
+        # France has 3 units, 3 SCs → delta=0, no builds needed
+        # Change SC count to simulate needing builds
+        self.bridge.state["players"]["france"]["supplyCenterCount"] = 5
+        # Submit only 1 CREATE when need 2
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "A",
+        })
+        result = self.tools.dispatch("finalize_builds", {})
+        self.assertFalse(result["ok"])
+        self.assertIn("Wrong number of builds", result["error"])
+
+    def test_finalize_builds_succeeds_with_correct_create_count(self):
+        self.bridge.state["players"]["france"]["supplyCenterCount"] = 5
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "A",
+        })
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "MAR", "unit_type": "F",
+        })
+        result = self.tools.dispatch("finalize_builds", {})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["order_count"], 2)
+        self.assertTrue(self.tools.is_finalized())
+
+    def test_finalize_builds_succeeds_when_delta_zero(self):
+        # Reset SC count to match unit count (3 SCs, 3 units)
+        self.bridge.state["players"]["france"]["supplyCenterCount"] = 3
+        result = self.tools.dispatch("finalize_builds", {})
+        self.assertTrue(result["ok"])
+        self.assertIn("No builds needed", result["message"])
+        self.assertTrue(self.tools.is_finalized())
+
+    def test_get_builds_returns_pending_builds(self):
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "PAR", "unit_type": "A",
+        })
+        self.tools.dispatch("submit_build", {
+            "action": "CREATE", "location_id": "MAR", "unit_type": "F",
+        })
+        builds = self.tools.get_builds()
+        self.assertEqual(len(builds), 2)
+        self.assertIn(builds[0]["locationId"], ["PAR", "MAR"])
+        self.assertIn(builds[1]["locationId"], ["PAR", "MAR"])

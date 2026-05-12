@@ -270,3 +270,193 @@ class AgentTools:
 
     def is_finalized(self) -> bool:
         return self._finalized
+
+    # ── Build phase tools ───────────────────────────────────────────
+
+    @staticmethod
+    def build_definitions() -> list:
+        """Return the tool definitions for the BUILD phase."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_my_units",
+                    "description": "Get a list of your current units with their type and location.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_valid_builds",
+                    "description": "Get your open home centers where you can build new units. Only empty home SCs you own are listed.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_supply_centers",
+                    "description": "Get supply center ownership information.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "submit_build",
+                    "description": "Submit one build action: CREATE a new unit in an open home center, or DESTROY one of your existing units.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["CREATE", "DESTROY"],
+                                "description": "CREATE a new unit or DESTROY an existing one"
+                            },
+                            "unit_type": {
+                                "type": "string",
+                                "enum": ["A", "F"],
+                                "description": "Unit type for CREATE (A=Army, F=Fleet). Not needed for DESTROY."
+                            },
+                            "location_id": {
+                                "type": "string",
+                                "description": "Home SC to build in (for CREATE) or location of unit to destroy (for DESTROY)"
+                            },
+                        },
+                        "required": ["action", "location_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "cancel_build",
+                    "description": "Remove a previously submitted build action for a location.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location_id": {"type": "string", "description": "The location to cancel the build for"}
+                        },
+                        "required": ["location_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "finalize_builds",
+                    "description": "Signal that you are finished submitting build actions. Call when you've submitted the required number.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+        ]
+
+    def _tool_get_valid_builds(self, args: dict) -> dict:
+        view = self.bridge.get_player_view(self.player_id)
+        valid = view.get("validBuilds", [])
+        # Enrich with province type info so agents know fleet eligibility
+        state = self.bridge.get_state()
+        enriched = []
+        for loc in valid:
+            province = state.get("provinces", {}).get(loc)
+            ptype = province.get("type", "?") if province else "?"
+            fleet_ok = ptype in ("COAST", "SEA")
+            enriched.append({
+                "location": loc,
+                "province_type": ptype,
+                "can_build_fleet": fleet_ok,
+                "can_build_army": True,
+            })
+        return {"valid_builds": enriched, "count": len(enriched)}
+
+    def _tool_submit_build(self, args: dict) -> dict:
+        action = args["action"]
+        location_id = args["location_id"]
+
+        if action == "CREATE":
+            unit_type = args.get("unit_type", "A")
+            if unit_type not in ("A", "F"):
+                return {"ok": False, "error": "unit_type must be 'A' or 'F'"}
+
+            # Validate location is a valid build target
+            view = self.bridge.get_player_view(self.player_id)
+            valid = view.get("validBuilds", [])
+            if location_id not in valid:
+                return {"ok": False, "error": f"'{location_id}' is not a valid build location. Valid: {valid}"}
+
+            # No duplicate builds in same location
+            for existing in self._pending_orders.values():
+                if existing.get("locationId") == location_id:
+                    return {"ok": False, "error": f"Already submitted a build for {location_id}"}
+
+            build = {
+                "type": "CREATE",
+                "unitType": unit_type,
+                "locationId": location_id,
+            }
+
+        elif action == "DESTROY":
+            # Validate the unit exists and belongs to this player
+            state = self.bridge.get_state()
+            found = False
+            for uid, u in state.get("units", {}).items():
+                if u.get("ownerId") == self.player_id and u.get("locationId") == location_id:
+                    found = True
+                    break
+            if not found:
+                return {"ok": False, "error": f"No unit of yours found at {location_id}"}
+
+            build = {
+                "type": "DESTROY",
+                "locationId": location_id,
+            }
+        else:
+            return {"ok": False, "error": f"Unknown action: {action}"}
+
+        # Use location as key (only one build per location)
+        key = f"build_{action}_{location_id}"
+        self._pending_orders[key] = build
+        return {"ok": True, "build": build}
+
+    def _tool_cancel_build(self, args: dict) -> dict:
+        location_id = args["location_id"]
+        for key in list(self._pending_orders.keys()):
+            val = self._pending_orders[key]
+            if val.get("locationId") == location_id:
+                del self._pending_orders[key]
+                return {"ok": True, "cancelled": location_id}
+        return {"ok": False, "error": f"No pending build for {location_id}"}
+
+    def _tool_finalize_builds(self, args: dict) -> dict:
+        state = self.bridge.get_state()
+        player = state.get("players", {}).get(self.player_id, {})
+        sc_count = player.get("supplyCenterCount", 0)
+        unit_count = len(player.get("units", {}))
+        delta = sc_count - unit_count
+
+        creates = [b for b in self._pending_orders.values() if b.get("type") == "CREATE"]
+        destroys = [b for b in self._pending_orders.values() if b.get("type") == "DESTROY"]
+
+        if delta > 0:
+            expected = delta
+            actual = len(creates)
+        elif delta < 0:
+            expected = abs(delta)
+            actual = len(destroys)
+        else:
+            self._finalized = True
+            return {"ok": True, "order_count": 0, "message": "No builds needed — unit count matches SC count"}
+
+        if actual != expected:
+            return {
+                "ok": False,
+                "error": f"Wrong number of builds: need {expected} {'CREATE' if delta > 0 else 'DESTROY'}(s) but have {actual}. Submitted: {list(self._pending_orders.values())}"
+            }
+
+        self._finalized = True
+        return {"ok": True, "order_count": actual, "message": "Builds finalized successfully"}
+
+    def get_builds(self) -> list:
+        """Return the list of validated build orders."""
+        return list(self._pending_orders.values())
