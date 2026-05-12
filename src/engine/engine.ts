@@ -14,6 +14,12 @@ export class DiplomacyEngine {
     const orders = new Map<string, Order>();
 
     if (initialPlacements) {
+      // Build supply center ownership map from home centers
+      const scOwners = new Map<string, string>();
+      for (const [pid, scs] of Object.entries(HOME_SCS)) {
+        for (const sc of scs) scOwners.set(sc, pid);
+      }
+
       for (const playerId of PLAYERS) {
         const unitMap = new Map<string, Unit>();
         const placements = initialPlacements[playerId] || [];
@@ -50,10 +56,17 @@ export class DiplomacyEngine {
         units: allUnits,
         orders,
         retreatsNeeded: [],
+        supplyCenterOwners: scOwners,
       };
     }
 
     // Placement phase: create players with no units
+    // Initialize supply center ownership from home centers
+    const scOwners = new Map<string, string>();
+    for (const [pid, scs] of Object.entries(HOME_SCS)) {
+      for (const sc of scs) scOwners.set(sc, pid);
+    }
+    
     for (const playerId of PLAYERS) {
       players.set(playerId, {
         id: playerId,
@@ -73,6 +86,7 @@ export class DiplomacyEngine {
       units: allUnits,
       orders,
       retreatsNeeded: [],
+      supplyCenterOwners: scOwners,
     };
   }
 
@@ -169,6 +183,28 @@ export class DiplomacyEngine {
   }
 
   submitBuild(state: GameState, playerId: string, builds: BuildOrder[]): GameState {
+    const player = state.players.get(playerId);
+    if (!player) throw new Error(`Player ${playerId} not found`);
+
+    // ── Validate build count against SC delta (§BUG 1 fix) ──
+    const delta = player.supplyCenterCount - player.units.size;
+    const creates = builds.filter(b => b.type === "CREATE");
+    const destroys = builds.filter(b => b.type === "DESTROY");
+
+    if (delta > 0 && creates.length > delta) {
+      throw new Error(
+        `Build count exceeded: ${player.name} needs ${delta} build(s) but got ${creates.length} CREATE orders. ` +
+        `Supply centers: ${player.supplyCenterCount}, units: ${player.units.size}`
+      );
+    }
+    if (delta < 0 && destroys.length > Math.abs(delta)) {
+      throw new Error(
+        `Disband count exceeded: ${player.name} needs ${Math.abs(delta)} disband(s) but got ${destroys.length} DESTROY orders. ` +
+        `Supply centers: ${player.supplyCenterCount}, units: ${player.units.size}`
+      );
+    }
+    // ─────────────────────────────────────────────────────
+
     const nextUnits = new Map(state.units);
     const nextPlayers = new Map(state.players);
 

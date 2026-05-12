@@ -67,6 +67,9 @@ export interface GameState {
   readonly units: ReadonlyMap<string, Unit>;
   readonly orders: ReadonlyMap<string, Order>;
   readonly retreatsNeeded: readonly string[];
+  /** Tracks which player controls each supply center (by province ID).
+   *  Updated after Fall resolution. Home centers are initialized to their home players. */
+  readonly supplyCenterOwners: ReadonlyMap<string, string>;
 }
 
 export interface ResolutionResult {

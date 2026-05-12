@@ -257,10 +257,11 @@ class DiplomacyAgent:
         return "\n".join(parts)
     
     def generate_orders(self) -> list:
-        """Ask the LLM to generate orders based on current game state."""
+        """Ask the LLM to generate orders based on current game state.
+        Retries once with stronger formatting instructions on parse failure."""
         state_text = self._get_state_text()
         
-        prompt = f"""{state_text}
+        base_prompt = f"""{state_text}
 
 === YOUR TASK ===
 Negotiation is over. Submit your orders NOW.
@@ -281,18 +282,33 @@ IMPORTANT:
 
 Respond with a JSON array of orders. Nothing else."""
 
-        response = self.llm.chat(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            system=self.system_prompt,
-            temperature=0.3,
-            max_tokens=1000,
-            fallback_model=self.fallback_model,
-        )
-        return self._parse_json(response)
+        for attempt in range(2):
+            prompt = base_prompt
+            if attempt > 0:
+                prompt += (
+                    "\n\n⚠️ CRITICAL FORMATTING RULE ⚠️\n"
+                    "Your previous response was NOT valid JSON. You MUST output ONLY a JSON array.\n"
+                    "Start your response with '[' and end with ']'. NO explanations, NO reasoning, NO markdown.\n"
+                    "Example: [{\"unitId\":\"A_BER_0_germany\",\"type\":\"HOLD\"},{\"unitId\":\"A_MUN_1_germany\",\"type\":\"MOVE\",\"targetLocationId\":\"KIE\"}]\n"
+                )
+
+            response = self.llm.chat(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                system=self.system_prompt,
+                temperature=0.3,
+                max_tokens=1000,
+                fallback_model=self.fallback_model,
+            )
+            orders = self._parse_json(response)
+            if orders:
+                return orders
+        
+        return []
     
     def generate_placements(self) -> list:
-        """Ask the LLM to choose where to place its initial units."""
+        """Ask the LLM to choose where to place its initial units.
+        Retries once with stronger formatting instructions on parse failure."""
         try:
             view = self.bridge.get_player_view(self.player_id)
         except Exception as e:
@@ -314,7 +330,7 @@ Respond with a JSON array of orders. Nothing else."""
         
         home_count = len(by_location)  # number of home SCs = placements needed
         
-        prompt = f"""You are the Grand Strategist of {self.country_name}. It is Spring 1901.
+        base_prompt = f"""You are the Grand Strategist of {self.country_name}. It is Spring 1901.
 
 Your home supply centers (you must place exactly {home_count} unit(s), one per center):
 {chr(10).join(placement_lines)}
@@ -330,15 +346,29 @@ Respond with a JSON array of placements. Example:
 
 Respond with JSON array only."""
 
-        response = self.llm.chat(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            system=self.system_prompt,
-            temperature=0.5,
-            max_tokens=500,
-            fallback_model=self.fallback_model,
-        )
-        return self._parse_json(response)
+        for attempt in range(2):
+            prompt = base_prompt
+            if attempt > 0:
+                prompt += (
+                    "\n\n⚠️ CRITICAL FORMATTING RULE ⚠️\n"
+                    "Your previous response was NOT valid JSON. You MUST output ONLY a JSON array.\n"
+                    "Start with '[' and end with ']'. NO explanations, NO reasoning, NO markdown.\n"
+                    "Example: [{\"type\":\"A\",\"locationId\":\"VIE\"},{\"type\":\"F\",\"locationId\":\"TRI\"},{\"type\":\"A\",\"locationId\":\"BUD\"}]\n"
+                )
+
+            response = self.llm.chat(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                system=self.system_prompt,
+                temperature=0.5,
+                max_tokens=500,
+                fallback_model=self.fallback_model,
+            )
+            placements = self._parse_json(response)
+            if placements:
+                return placements
+        
+        return []
     
     def negotiate(self, max_msgs: int):
         """Run negotiation loop in a thread."""
@@ -896,38 +926,91 @@ class Orchestrator:
                 
                 if delta > 0:
                     print(f"  {agent.country_name}: +{delta} in {valid_builds}")
-                    prompt = f"""{state_text}
+                    base_prompt = f"""{state_text}
 
-Build {delta} unit(s) in open home centers: {', '.join(valid_builds)}
+Build EXACTLY {delta} unit(s) in open home centers: {', '.join(valid_builds)}
 
+You MUST output exactly {delta} CREATE entries — no more, no less.
 Format: [{{"type": "CREATE", "unitType": "A", "locationId": "PAR"}}, ...]
 UnitType: "A" for Army, "F" for Fleet.
 Respond with JSON array only."""
                 else:
                     print(f"  {agent.country_name}: disband {abs(delta)}")
-                    prompt = f"""{state_text}
+                    base_prompt = f"""{state_text}
 
-Disband {abs(delta)} unit(s). Your units: {', '.join(f'{uid}@{u.get("locationId")}' for uid, u in units.items())}
+Disband EXACTLY {abs(delta)} unit(s). Your units: {', '.join(f'{uid}@{u.get("locationId")}' for uid, u in units.items())}
 
+You MUST output exactly {abs(delta)} DESTROY entries — no more, no less.
 Format: [{{"type": "DESTROY", "locationId": "PAR"}}, ...]
 Respond with JSON array only."""
                 
-                response = agent.llm.chat(
-                    model=agent.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    system=agent.system_prompt,
-                    temperature=0.3,
-                    max_tokens=500,
-                    fallback_model=agent.fallback_model,
-                )
+                builds = self._get_builds_with_retry(agent, base_prompt, delta, valid_builds, units)
                 
-                builds = agent._parse_json(response)
                 if builds:
                     self.bridge.submit_build(pid, builds)
                     for b in builds:
                         print(f"    {b.get('type')}: {b.get('unitType', '')} {b.get('locationId', '')}")
+                else:
+                    # Final fallback: auto-pick first N valid builds
+                    if delta > 0 and valid_builds:
+                        builds = [
+                            {"type": "CREATE", "unitType": "A", "locationId": valid_builds[i]}
+                            for i in range(min(delta, len(valid_builds)))
+                        ]
+                        self.bridge.submit_build(pid, builds)
+                        print(f"  ⚠ {agent.country_name}: auto-fallback builds used")
+                        for b in builds:
+                            print(f"    {b.get('type')}: {b.get('unitType', '')} {b.get('locationId', '')}")
+                    elif delta < 0:
+                        disband_units = list(units.items())[:abs(delta)]
+                        builds = [
+                            {"type": "DESTROY", "locationId": u.get("locationId")}
+                            for _, u in disband_units
+                        ]
+                        self.bridge.submit_build(pid, builds)
+                        print(f"  ⚠ {agent.country_name}: auto-fallback disbands used")
+                        for b in builds:
+                            print(f"    {b.get('type')}: {b.get('locationId', '')}")
             except Exception as e:
                 print(f"  ⚠ {agent.country_name} build err: {e}")
+    
+    def _get_builds_with_retry(self, agent, base_prompt: str, delta: int,
+                                valid_builds: list, units: dict) -> list:
+        """Get builds from LLM with count validation and one retry."""
+        for attempt in range(2):
+            prompt = base_prompt
+            if attempt > 0:
+                count = delta if delta > 0 else abs(delta)
+                prompt += (
+                    f"\n\n⚠️ CRITICAL: You must output EXACTLY {count} entries. "
+                    "NO more, NO less. Your previous response had the wrong number.\n"
+                    "Output ONLY a JSON array. Start with '[' and end with ']'.\n"
+                )
+            
+            response = agent.llm.chat(
+                model=agent.model,
+                messages=[{"role": "user", "content": prompt}],
+                system=agent.system_prompt,
+                temperature=0.3,
+                max_tokens=500,
+                fallback_model=agent.fallback_model,
+            )
+            
+            builds = agent._parse_json(response)
+            if not builds:
+                continue
+            
+            # Validate count
+            expected = delta if delta > 0 else abs(delta)
+            actual_type = "CREATE" if delta > 0 else "DESTROY"
+            actual_count = sum(1 for b in builds if b.get("type") == actual_type)
+            
+            if actual_count == expected:
+                return builds
+            
+            print(f"  ⚠ {agent.country_name}: got {actual_count} {actual_type}(s), expected {expected} — retrying")
+        
+        return []
     
     def _show_resolution(self, result: dict):
         r = result.get("result", {})

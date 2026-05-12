@@ -19,7 +19,7 @@ python3 ai-orchestrator/orchestrator.py
 
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
-pnpm test                          # 126 tests: 112 engine + 14 bridge
+pnpm test                          # 127 tests: 112 engine + 15 bridge
 python3 ai-orchestrator/__tests__/test_orchestrator.py  # 37 orchestrator tests
 
 # Individual suites
@@ -47,13 +47,15 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 | Method | Params | Returns |
 |--------|--------|---------|
 | `reset` | — | `{}` |
-| `getState` | — | `{state: {year, season, phase, players, units, retreatsNeeded}}` |
-| `getPlayerView` | `{playerId}` | `{view: {player, visibleUnits, validMoves, validBuilds}}` |
+| `getState` | — | `{state: {year, season, phase, players, units, retreatsNeeded, supplyCenterOwners}}` |
+| `getPlayerView` | `{playerId}` | `{view: {player, visibleUnits, validMoves, validBuilds, validPlacements}}` |
+| `submitPlacements` | `{playerId, placements}` | `{}` |
 | `submitOrders` | `{playerId, orders}` | `{}` |
 | `resolve` | — | `{result: {successfulMoves, bouncedMoves, dislodgedUnits}, winner, nextPhase}` |
 | `submitRetreat` | `{unitId, locationId?, disband?}` | `{phase}` |
-| `submitBuild` | `{playerId, builds}` | `{}` |
+| `submitBuild` | `{playerId, builds}` | `{}` (throws if build count exceeds SC delta) |
 | `advanceBuilds` | — | `{phase}` |
+| `advancePhase` | — | `{phase}` |
 | `getStatus` | — | `{status: {winner, phase, currentSeason, currentYear}}` |
 
 **Chat Commands:**
@@ -69,9 +71,10 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 ```
 ┌─────────────────────────────────────────────────────┐
 │ PLACEMENT (first year only)                         │
-│  0. Each AI chooses starting unit positions         │
-│     (army vs fleet per home supply center)          │
-│     Fallback: auto-placement if LLM returns empty   │
+│  0. Each AI chooses starting unit positions          │
+│     (army vs fleet per home supply center)           │
+│     Retry on parse failure, then fallback to         │
+│     auto-placement if LLM returns empty              │
 ├─────────────────────────────────────────────────────┤
 │ SPRING ORDER                                        │
 │  1. All 7 agents receive board state + valid moves  │
@@ -82,6 +85,8 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │     → messages are sanitized before posting to      │
 │       strip meta-reasoning, JSON, and markup         │
 │  4. Window closes, each agent generates orders       │
+│     (with retry on parse failure: LLM gets a         │
+│     second attempt with loud formatting warning)     │
 │  5. All orders submitted simultaneously to engine    │
 │  6. Engine resolves (supports, combat, standoffs)   │
 │     → RESOLUTION is an internal phase; the bridge   │
@@ -95,7 +100,12 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │ FALL ORDER (same as spring)                         │
 ├─────────────────────────────────────────────────────┤
 │ WINTER BUILDS                                       │
-│  8. Delta (SCs - units): build or disband           │
+│  8. Supply center ownership recalculated: any unit   │
+│     sitting on a SC claims it; empty SCs keep        │
+│     previous owner (tracked per-center, not just     │
+│     incrementing). Delta (SCs - units): build or     │
+│     disband. Build count is validated by engine       │
+│     and orchestrator with retry + auto-fallback.     │
 ├─────────────────────────────────────────────────────┤
 │ NEXT YEAR (repeat until 18 SCs or max years)        │
 └─────────────────────────────────────────────────────┘
@@ -109,7 +119,7 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
     "negotiation_window_seconds": 240,
     "max_negotiation_messages_per_agent": 15,
     "max_years": 20,
-    "fallback_model": "deepseek/deepseek-v4-flash"
+    "fallback_model": "openai/gpt-5.4-nano"
   },
   "global_instructions": "Full system prompt template with {country_name}",
   "agents": {
@@ -172,11 +182,14 @@ export OPENROUTER_API_KEY=sk-or-v1-...
 Make sure `pnpm install` has been run in the repo root. The bridge needs `tsx` (in devDependencies).
 
 **Agents produce invalid orders or empty responses**
-The orchestrator has multiple fallback layers:
-1. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `deepseek/deepseek-v4-flash`) is tried automatically.
-2. **Placement fallback**: If both models return empty for placements, valid placements are auto-selected (first valid type per home center).
-3. **Order fallback**: If both models return empty for orders, all units are set to HOLD.
-4. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
+The orchestrator has multiple fallback and retry layers:
+
+1. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically on a different model.
+2. **Parse retry**: If the LLM response isn't valid JSON (e.g., reasoning prose instead of structured output), the prompt is retried once with a loud formatting warning block asking for `[...]` JSON only. This catches models like Nemotron that output their internal deliberation.
+3. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
+4. **Order fallback**: If all retries fail for orders, all units are set to HOLD.
+5. **Build count validation**: The engine enforces that CREATE orders don't exceed the supply center surplus, and DESTROY orders don't exceed the deficit. The orchestrator validates count pre-submission and retries once on mismatch. If both attempts fail, an auto-fallback picks the first N valid home centers.
+6. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
 
 Check the stderr output for the raw LLM response if debugging is needed.
 

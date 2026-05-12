@@ -4,6 +4,10 @@ import { GameState, Player, Unit, ResolutionResult } from "../types";
 import { createProvinces } from "../provinces";
 
 function emptyState(season: "SPRING" | "FALL" = "FALL"): GameState {
+  const owners = new Map<string, string>([
+    ["PAR", "france"], ["MAR", "france"], ["BRE", "france"],
+    ["BER", "germany"], ["MUN", "germany"], ["KIE", "germany"],
+  ]);
   return {
     year: 1901, season, phase: "RESOLUTION" as any,
     players: new Map([
@@ -12,6 +16,7 @@ function emptyState(season: "SPRING" | "FALL" = "FALL"): GameState {
     ]),
     provinces: createProvinces(),
     units: new Map(), orders: new Map(), retreatsNeeded: [],
+    supplyCenterOwners: owners,
   } as any;
 }
 
