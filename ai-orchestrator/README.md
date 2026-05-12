@@ -20,7 +20,7 @@ python3 ai-orchestrator/orchestrator.py
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
 pnpm test                          # 128 tests: 112 engine + 16 bridge
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 54 orchestrator tests
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 75 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -33,11 +33,30 @@ pnpm vitest run src/engine/__tests__/
 orchestrator.py (Python, stdlib only)
 ├── 7× DiplomacyAgent (threads)
 │     └── OpenRouter API → LLM models (Claude, GPT-4o, Gemini, etc.)
-├── LLMClient → https://openrouter.ai/api/v1/chat/completions
+│           └── Tool-calling loop: agents explore state via validated tools
+│               before submitting orders (ORDER phase)
+├── AgentTools → validates orders at call time, buffers submissions
+├── LLMClient → chat_with_tools() multi-turn tool loop + plain chat()
 └── EngineBridge (subprocess)
       └── npx tsx engine-bridge.ts → DiplomacyEngine (TypeScript)
             └── In-memory ChatManager (negotiation channels + messages)
 ```
+
+### ORDER Phase: Tool-Based Submission
+
+Instead of receiving a text dump and being told to "output JSON only", agents now use OpenRouter's tool-calling API with validated function tools:
+
+| Tool | Purpose |
+|------|---------|
+| `get_my_units` | List agent's units (type, location, order status) |
+| `get_valid_moves` | Valid move destinations for a specific unit |
+| `get_visible_units` | All units on the board (friendly + enemy) |
+| `get_supply_centers` | Supply center ownership info |
+| `submit_order` | Submit one order (validates unit ownership + move legality) |
+| `cancel_order` | Remove a previously submitted order |
+| `finalize_orders` | Signal completion (checks all units have orders) |
+
+Validation happens at tool-call time — if an agent tries to move to an invalid territory or submit orders for an enemy unit, the tool returns an error immediately. The agent can self-correct in the same conversation turn. No JSON parsing, no retry prompts, no format-scolding.
 
 ### Engine Bridge Protocol
 
@@ -84,9 +103,12 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │     → agents chat in global + private DM channels    │
 │     → messages are sanitized before posting to      │
 │       strip meta-reasoning, JSON, and markup         │
-│  4. Window closes, each agent generates orders       │
-│     (with retry on parse failure: LLM gets a         │
-│     second attempt with loud formatting warning)     │
+│  4. Window closes, each agent enters tool loop:      │
+│     → calls get_my_units, get_valid_moves, etc.     │
+│     → submits orders via submit_order tool          │
+│     → validates at call time (no parsing needed)    │
+│     → calls finalize_orders when done               │
+│     → HOLD fallback if tool loop produces nothing   │
 │  5. All orders submitted simultaneously to engine    │
 │  6. Engine resolves (supports, combat, standoffs)   │
 │     → RESOLUTION is an internal phase; the bridge   │
@@ -201,11 +223,14 @@ This ensures agents know they can HOLD or SUPPORT even when no move destinations
 
 | File | Purpose |
 |------|---------|
-| `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry), EngineBridge |
+| `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry + tool-calling loop), EngineBridge |
+| `agent_tools.py` | Tool definitions + AgentTools dispatcher: validates and buffers orders for the ORDER phase |
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
 | `agents.json` | Country → OpenRouter model + persona + fallback_model + game settings |
 | `__tests__/engine-bridge.test.ts` | 16 tests for the JSON-line bridge protocol |
-| `__tests__/test_orchestrator.py` | 54 tests: config, parsing, prompts, fallback model, chat sanitization, board display, state text |
+| `__tests__/test_orchestrator.py` | 55 tests: config, parsing, prompts, fallback model, chat sanitization, board display, state text, tool-based order generation |
+| `__tests__/test_agent_tools.py` | 18 tests for all tool methods + input validation |
+| `__tests__/test_tool_client.py` | 2 tests for the chat_with_tools tool-calling loop |
 
 ## Troubleshooting
 
@@ -218,14 +243,16 @@ export OPENROUTER_API_KEY=sk-or-v1-...
 Make sure `pnpm install` has been run in the repo root. The bridge needs `tsx` (in devDependencies).
 
 **Agents produce invalid orders or empty responses**
+
 The orchestrator has multiple fallback and retry layers:
 
-1. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically on a different model.
-2. **Parse retry**: If the LLM response isn't valid JSON (e.g., reasoning prose instead of structured output), the prompt is retried once with a loud formatting warning block asking for `[...]` JSON only. This catches models like Nemotron that output their internal deliberation.
-3. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
-4. **Order fallback**: If all retries fail for orders, all units are set to HOLD.
-5. **Build count validation**: The engine enforces that CREATE orders don't exceed the supply center surplus, and DESTROY orders don't exceed the deficit. The orchestrator validates count pre-submission and retries once on mismatch. If both attempts fail, an auto-fallback picks the first N valid home centers.
-6. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
+1. **Tool-based validation (ORDER phase)**: Agents submit orders via validated tool calls. Invalid moves or enemy units are rejected at call time with clear error messages — the agent self-corrects in the same turn. No JSON parsing needed for orders.
+2. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically.
+3. **HOLD fallback (ORDER phase)**: If the tool loop produces no orders (exhausted max_turns, unresponsive model), all units default to HOLD.
+4. **Parse retry (placement/build phases)**: If the LLM response isn't valid JSON, the prompt is retried once with a formatting warning. These phases still use the text-to-JSON approach.
+5. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
+6. **Build count validation**: The engine enforces that CREATE orders don't exceed the supply center surplus, and DESTROY orders don't exceed the deficit. The orchestrator validates count pre-submission and retries once on mismatch. If both attempts fail, an auto-fallback picks the first N valid home centers.
+7. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
 
 Check the stderr output for the raw LLM response if debugging is needed.
 

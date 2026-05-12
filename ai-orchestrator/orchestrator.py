@@ -89,6 +89,88 @@ class LLMClient:
         
         return content
 
+    def chat_with_tools(self, model: str, messages: list, tools: list,
+                        tool_handler, system: str = None,
+                        temperature: float = 0.3, max_tokens: int = 2000,
+                        max_turns: int = 10, fallback_model: str = None) -> str:
+        """Run a tool-calling conversation loop.
+
+        Sends messages + tools to the LLM. When the LLM responds with
+        tool_calls, dispatches to tool_handler and feeds results back.
+        Continues until the LLM responds with text (no tool_calls) or
+        max_turns is reached.
+
+        Returns the final text response, or empty string on exhaustion.
+        """
+        turn = 0
+        while turn < max_turns:
+            turn += 1
+
+            payload = {
+                "model": model,
+                "messages": messages,
+                "tools": tools,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if system:
+                payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(self.BASE, data=data, method="POST")
+            req.add_header("Authorization", f"Bearer {self.api_key}")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("HTTP-Referer", "https://github.com/diplomacy-ai")
+            req.add_header("X-Title", "Diplomacy AI Orchestrator")
+
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read())
+
+            if "error" in result:
+                raise RuntimeError(f"OpenRouter error: {json.dumps(result['error'])}")
+
+            msg = result["choices"][0]["message"]
+
+            # Check for tool calls
+            tool_calls = msg.get("tool_calls", [])
+            if tool_calls:
+                # Add assistant message with tool_calls to conversation
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.get("content"),
+                    "tool_calls": tool_calls,
+                })
+
+                # Dispatch each tool call and collect results
+                for tc in tool_calls:
+                    fn = tc["function"]
+                    fn_name = fn["name"]
+                    try:
+                        fn_args = json.loads(fn.get("arguments", "{}"))
+                    except json.JSONDecodeError:
+                        fn_args = {}
+
+                    try:
+                        fn_result = tool_handler(fn_name, fn_args)
+                    except Exception as e:
+                        fn_result = {"error": str(e)}
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": json.dumps(fn_result),
+                    })
+
+                continue  # loop back for next LLM response
+
+            # Text response — conversation complete
+            content = msg.get("content", "")
+            if content is None:
+                content = ""
+            return content
+
+        return ""  # exhausted max_turns
+
 # ─── Engine Bridge (subprocess) ─────────────────────────────────────
 
 class EngineBridge:
@@ -264,54 +346,48 @@ class DiplomacyAgent:
         return "\n".join(parts)
     
     def generate_orders(self) -> list:
-        """Ask the LLM to generate orders based on current game state.
-        Retries once with stronger formatting instructions on parse failure."""
+        """Use the tool-based flow to generate orders via validated tool calls."""
+        from agent_tools import AgentTools
+
+        tools = AgentTools(self.player_id, self.bridge)
+
         state_text = self._get_state_text()
-        
-        base_prompt = f"""{state_text}
 
-=== YOUR TASK ===
-Negotiation is over. Submit your orders NOW.
+        initial_prompt = f"""{state_text}
 
-For each of your units, issue exactly ONE order. 
+Negotiation is over. Use the available tools to explore the board and submit your orders.
+For each of your units, call get_my_units to see them, get_valid_moves to see where each
+can go, then call submit_order once per unit. When all units have orders, call finalize_orders.
 
-Order types:
-- HOLD: {{"unitId": "A_PAR_0_france", "type": "HOLD"}}
-- MOVE: {{"unitId": "A_PAR_0_france", "type": "MOVE", "targetLocationId": "BUR"}}
-- SUPPORT HOLD: {{"unitId": "A_MAR_1_france", "type": "SUPPORT", "supportUnitId": "A_PAR_0_france", "supportOrderType": "HOLD"}}
-- SUPPORT MOVE: {{"unitId": "A_MAR_1_france", "type": "SUPPORT", "supportUnitId": "A_PAR_0_france", "supportOrderType": "MOVE", "supportTargetLocationId": "BUR"}}
+Strategic notes:
+- MOVE only to valid destinations returned by get_valid_moves
+- HOLD is always valid — use it to defend or when no good move exists
+- SUPPORT a friendly unit's MOVE or HOLD to increase its strength
+- For fleet moves to Spain/StP/Bulgaria, specify the exact coast (SPA_NC, SPA_SC, STP_NC, STP_SC, BUL_EC, BUL_SC)"""
 
-IMPORTANT:
-- One order per unit. No more, no less.
-- MOVE only to valid adjacent territories listed above.
-- SUPPORT a specific unit's action, not a territory.
-- For fleet moves to Spain/StP/Bulgaria, specify coast: SPA_NC, SPA_SC, STP_NC, STP_SC, BUL_EC, BUL_SC.
+        self.llm.chat_with_tools(
+            model=self.model,
+            messages=[{"role": "user", "content": initial_prompt}],
+            tools=AgentTools.definitions(),
+            tool_handler=tools.dispatch,
+            system=self.system_prompt,
+            temperature=0.3,
+            max_tokens=1000,
+            max_turns=20,
+            fallback_model=self.fallback_model,
+        )
 
-Respond with a JSON array of orders. Nothing else."""
+        orders = tools.get_orders()
 
-        for attempt in range(2):
-            prompt = base_prompt
-            if attempt > 0:
-                prompt += (
-                    "\n\n⚠️ CRITICAL FORMATTING RULE ⚠️\n"
-                    "Your previous response was NOT valid JSON. You MUST output ONLY a JSON array.\n"
-                    "Start your response with '[' and end with ']'. NO explanations, NO reasoning, NO markdown.\n"
-                    "Example: [{\"unitId\":\"A_BER_0_germany\",\"type\":\"HOLD\"},{\"unitId\":\"A_MUN_1_germany\",\"type\":\"MOVE\",\"targetLocationId\":\"KIE\"}]\n"
-                )
+        if not orders:
+            # Fallback: if tool loop produced nothing, HOLD all units
+            state = self.bridge.get_state()
+            player = state.get("players", {}).get(self.player_id, {})
+            units = player.get("units", {})
+            if units:
+                orders = [{"unitId": uid, "type": "HOLD"} for uid in units]
 
-            response = self.llm.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                system=self.system_prompt,
-                temperature=0.3,
-                max_tokens=1000,
-                fallback_model=self.fallback_model,
-            )
-            orders = self._parse_json(response)
-            if orders:
-                return orders
-        
-        return []
+        return orders
     
     def generate_placements(self) -> list:
         """Ask the LLM to choose where to place its initial units.
@@ -932,16 +1008,12 @@ class Orchestrator:
                     continue
                 
                 orders = agent.generate_orders()
-                if orders:
-                    self.bridge.submit_orders(pid, orders)
-                    print(f"  ✓ {agent.country_name}: {len(orders)} orders")
-                    for o in orders:
-                        tgt = o.get("targetLocationId") or o.get("supportTargetLocationId") or ""
-                        print(f"      {o.get('unitId')}: {o.get('type')}{' → ' + tgt if tgt else ''}")
-                else:
-                    print(f"  ⚠ {agent.country_name}: fallback HOLD")
-                    hold_orders = [{"unitId": uid, "type": "HOLD"} for uid in units]
-                    self.bridge.submit_orders(pid, hold_orders)
+                # generate_orders() always returns a valid list (HOLD fallback built-in)
+                self.bridge.submit_orders(pid, orders)
+                print(f"  ✓ {agent.country_name}: {len(orders)} orders")
+                for o in orders:
+                    tgt = o.get("targetLocationId") or o.get("supportTargetLocationId") or ""
+                    print(f"      {o.get('unitId')}: {o.get('type')}{' → ' + tgt if tgt else ''}")
             except Exception as e:
                 print(f"  ❌ {agent.country_name}: {e}", flush=True)
     

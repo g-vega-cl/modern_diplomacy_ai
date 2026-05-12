@@ -192,13 +192,13 @@ All standard mechanics implemented: simultaneous resolution, support/hold/move, 
 ### Development
 
 ```bash
-pnpm test              # 127 tests (80 engine + 32 negotiation + 16 bridge)
+pnpm test              # 128 tests (80 engine + 32 negotiation + 16 bridge)
 pnpm test:watch    # Watch mode
 pnpm play          # Terminal CLI (human vs human)
 pnpm build         # TypeScript check
 
 # Python orchestrator tests
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 54 Python tests
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 75 Python tests
 
 # Full AI game
 python3 ai-orchestrator/orchestrator.py  # 7 AI agents (needs OPENROUTER_API_KEY)
@@ -305,14 +305,15 @@ src/
 
 ai-orchestrator/
   orchestrator.py      — Main game loop, 7 AI agents, OpenRouter client
+  agent_tools.py       — Tool definitions + validated dispatch for ORDER phase
   engine-bridge.ts     — Node.js subprocess wrapping the TypeScript engine
   agents.json          — Country → OpenRouter model + persona configuration
-  __tests__/           — 14 bridge tests + 37 Python tests
+  __tests__/           — 16 bridge tests + 75 Python tests
 ```
 
 ```bash
-pnpm test              # 127 tests (80 engine + 32 negotiation + 15 bridge)
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 51 Python tests
+pnpm test              # 128 tests (80 engine + 32 negotiation + 16 bridge)
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 75 Python tests
 ```
 
 ---

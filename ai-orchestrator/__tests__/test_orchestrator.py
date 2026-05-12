@@ -832,5 +832,128 @@ class TestBoardFormatter(unittest.TestCase):
         self.assertIn("╔", output)
 
 
+class TestToolBasedOrderGeneration(unittest.TestCase):
+    """Test that generate_orders uses the tool-based flow."""
+
+    def setUp(self):
+        config = {
+            "model": "test/model",
+            "country_name": "France",
+            "persona": "You are France.",
+        }
+        global_inst = "You are {country_name}."
+
+        class MockBridge:
+            def get_state(self):
+                return {
+                    "year": 1901, "season": "SPRING", "phase": "ORDER",
+                    "players": {
+                        "france": {
+                            "id": "france", "name": "France",
+                            "supplyCenterCount": 3, "eliminated": False,
+                            "units": {
+                                "A_PAR_0_france": {"id": "A_PAR_0_france", "type": "A", "locationId": "PAR"},
+                                "A_MAR_1_france": {"id": "A_MAR_1_france", "type": "A", "locationId": "MAR"},
+                                "F_BRE_2_france": {"id": "F_BRE_2_france", "type": "F", "locationId": "BRE"},
+                            },
+                        }
+                    },
+                    "units": {
+                        "A_PAR_0_france": {"id": "A_PAR_0_france", "type": "A", "ownerId": "france", "locationId": "PAR"},
+                        "A_MAR_1_france": {"id": "A_MAR_1_france", "type": "A", "ownerId": "france", "locationId": "MAR"},
+                        "F_BRE_2_france": {"id": "F_BRE_2_france", "type": "F", "ownerId": "france", "locationId": "BRE"},
+                        "A_BER_0_germany": {"id": "A_BER_0_germany", "type": "A", "ownerId": "germany", "locationId": "BER"},
+                    },
+                    "supplyCenterOwners": {},
+                    "retreatsNeeded": [],
+                }
+
+            def get_player_view(self, player_id):
+                return {
+                    "player": {
+                        "id": "france", "name": "France",
+                        "supplyCenterCount": 3, "eliminated": False,
+                        "units": {
+                            "A_PAR_0_france": {"id": "A_PAR_0_france", "type": "A", "locationId": "PAR"},
+                            "A_MAR_1_france": {"id": "A_MAR_1_france", "type": "A", "locationId": "MAR"},
+                            "F_BRE_2_france": {"id": "F_BRE_2_france", "type": "F", "locationId": "BRE"},
+                        },
+                    },
+                    "visibleUnits": [
+                        {"id": "A_PAR_0_france", "ownerId": "france", "type": "A", "locationId": "PAR"},
+                        {"id": "A_MAR_1_france", "ownerId": "france", "type": "A", "locationId": "MAR"},
+                        {"id": "F_BRE_2_france", "ownerId": "france", "type": "F", "locationId": "BRE"},
+                        {"id": "A_BER_0_germany", "ownerId": "germany", "type": "A", "locationId": "BER"},
+                    ],
+                    "validMoves": {
+                        "A_PAR_0_france": ["BUR", "PIC", "GAS", "BRE"],
+                        "A_MAR_1_france": ["PIE", "GAS", "BUR", "SPA"],
+                        "F_BRE_2_france": ["MAO", "ENG", "PIC", "GAS"],
+                    },
+                    "validBuilds": [],
+                    "validPlacements": [],
+                }
+
+        self.bridge = MockBridge()
+        self.agent = DiplomacyAgent(
+            "france", config, global_inst,
+            LLMClient("fake-key"), self.bridge,
+        )
+
+    @mock.patch("urllib.request.urlopen")
+    def test_generate_orders_produces_orders_for_all_units(self, mock_urlopen):
+        """Full tool loop: agent explores state, submits orders, finalizes."""
+        # Simulate LLM responses: query units → query moves → submit all → finalize → done
+        responses = [
+            # Turn 1: get_my_units
+            {"choices": [{"message": {"content": None, "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "get_my_units", "arguments": "{}"}}
+            ]}}]},
+            # Turn 2: get_valid_moves for all 3 units (batched)
+            {"choices": [{"message": {"content": None, "tool_calls": [
+                {"id": "c2", "type": "function", "function": {"name": "get_valid_moves", "arguments": '{"unit_id": "A_PAR_0_france"}'}},
+                {"id": "c3", "type": "function", "function": {"name": "get_valid_moves", "arguments": '{"unit_id": "A_MAR_1_france"}'}},
+                {"id": "c4", "type": "function", "function": {"name": "get_valid_moves", "arguments": '{"unit_id": "F_BRE_2_france"}'}},
+            ]}}]},
+            # Turn 3: submit all 3 orders
+            {"choices": [{"message": {"content": None, "tool_calls": [
+                {"id": "c5", "type": "function", "function": {"name": "submit_order", "arguments": '{"unit_id": "A_PAR_0_france", "order_type": "MOVE", "target_location": "BUR"}'}},
+                {"id": "c6", "type": "function", "function": {"name": "submit_order", "arguments": '{"unit_id": "A_MAR_1_france", "order_type": "HOLD"}'}},
+                {"id": "c7", "type": "function", "function": {"name": "submit_order", "arguments": '{"unit_id": "F_BRE_2_france", "order_type": "MOVE", "target_location": "MAO"}'}},
+            ]}}]},
+            # Turn 4: finalize
+            {"choices": [{"message": {"content": None, "tool_calls": [
+                {"id": "c8", "type": "function", "function": {"name": "finalize_orders", "arguments": "{}"}}
+            ]}}]},
+            # Turn 5: final text
+            {"choices": [{"message": {"content": "All orders submitted."}}]},
+        ]
+
+        class MockResponse:
+            def __init__(self, body_bytes):
+                self._body = body_bytes
+            def read(self):
+                return self._body
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+
+        idx = [0]
+        def side_effect(req, timeout=None):
+            i = idx[0]; idx[0] += 1
+            return MockResponse(json.dumps(responses[i]).encode("utf-8"))
+
+        mock_urlopen.side_effect = side_effect
+
+        orders = self.agent.generate_orders()
+
+        self.assertEqual(len(orders), 3)
+        unit_ids = [o["unitId"] for o in orders]
+        self.assertIn("A_PAR_0_france", unit_ids)
+        self.assertIn("A_MAR_1_france", unit_ids)
+        self.assertIn("F_BRE_2_france", unit_ids)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
