@@ -20,7 +20,7 @@ python3 ai-orchestrator/orchestrator.py
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
 pnpm test                          # 126 tests: 112 engine + 14 bridge
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 19 orchestrator tests
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 37 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -68,13 +68,19 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 
 ```
 ┌─────────────────────────────────────────────────────┐
+│ PLACEMENT (first year only)                         │
+│  0. Each AI chooses starting unit positions         │
+│     (army vs fleet per home supply center)          │
+│     Fallback: auto-placement if LLM returns empty   │
+├─────────────────────────────────────────────────────┤
 │ SPRING ORDER                                        │
 │  1. All 7 agents receive board state + valid moves  │
 │  2. 21 private DM channels are pre-created           │
 │     (one for each pair of powers)                    │
 │  3. 240s negotiation window (parallel threads)       │
 │     → agents chat in global + private DM channels    │
-│     → agents see which channel each message is in    │
+│     → messages are sanitized before posting to      │
+│       strip meta-reasoning, JSON, and markup         │
 │  4. Window closes, each agent generates orders       │
 │  5. All orders submitted simultaneously to engine    │
 │  6. Engine resolves (supports, combat, standoffs)   │
@@ -98,7 +104,8 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
   "game": {
     "negotiation_window_seconds": 240,
     "max_negotiation_messages_per_agent": 15,
-    "max_years": 20
+    "max_years": 20,
+    "fallback_model": "deepseek/deepseek-v4-flash"
   },
   "global_instructions": "Full system prompt template with {country_name}",
   "agents": {
@@ -116,6 +123,14 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
   }
 }
 ```
+
+`fallback_model`: When any agent's primary model returns empty/null content from OpenRouter, the orchestrator automatically retries with this model. This is a safety net for flash-tier or unreliable models. Set to `null` to disable.
+
+**Chat message sanitization:** All agent chat messages are automatically cleaned before posting:
+- Meta-reasoning is stripped (e.g., "We need to decide: respond or PASS...")
+- Markdown formatting markers removed (`**bold**`)
+- Raw JSON wrappers extracted (e.g., `[{"channelId":"global","content":"..."}]`)
+- Self-invented channel prefixes removed (`[Global Diplomacy — Country]:`)
 
 **Supported OpenRouter models (any from [openrouter.ai/models](https://openrouter.ai/models)):**
 
@@ -136,11 +151,11 @@ Other popular options: `anthropic/claude-sonnet-4`, `openai/gpt-4o`, `google/gem
 
 | File | Purpose |
 |------|---------|
-| `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient, EngineBridge |
+| `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry), EngineBridge |
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
-| `agents.json` | Country → OpenRouter model + persona + game settings |
+| `agents.json` | Country → OpenRouter model + persona + fallback_model + game settings |
 | `__tests__/engine-bridge.test.ts` | 14 tests for the JSON-line bridge protocol |
-| `__tests__/test_orchestrator.py` | 19 tests for config, parsing, prompts, None-guard |
+| `__tests__/test_orchestrator.py` | 37 tests: config, parsing, prompts, fallback model, chat sanitization |
 
 ## Troubleshooting
 
@@ -152,11 +167,17 @@ export OPENROUTER_API_KEY=sk-or-v1-...
 **"Bridge failed to start"**
 Make sure `pnpm install` has been run in the repo root. The bridge needs `tsx` (in devDependencies).
 
-**Agents produce invalid orders**
-The orchestrator falls back to HOLD orders if an agent's JSON can't be parsed. Check the stderr output for the raw LLM response.
+**Agents produce invalid orders or empty responses**
+The orchestrator has multiple fallback layers:
+1. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `deepseek/deepseek-v4-flash`) is tried automatically.
+2. **Placement fallback**: If both models return empty for placements, valid placements are auto-selected (first valid type per home center).
+3. **Order fallback**: If both models return empty for orders, all units are set to HOLD.
+4. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
+
+Check the stderr output for the raw LLM response if debugging is needed.
 
 **"NoneType" errors in negotiation or placement**
-Some flash-tier models occasionally return `null` content from OpenRouter. The orchestrator handles this gracefully — empty responses cause a PASS in negotiation or a fallback empty list in placement/order parsing. If a model consistently returns null, swap it for a more reliable one.
+These are now handled at two levels: the `fallback_model` retry (catches most transient failures) and the code-level fallbacks described above. If a model consistently returns null even with fallback, swap it in `agents.json`.
 
 **Rate limiting / costs**
 Each negotiation message costs ~200-300 tokens. At 15 messages/agent × 7 agents × 2 phases × ~20 years, a full game could use ~100K-200K input tokens. Set lower `max_negotiation_messages_per_agent` or `max_years` to control costs.

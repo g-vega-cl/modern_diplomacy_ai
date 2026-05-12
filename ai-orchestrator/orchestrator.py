@@ -38,10 +38,10 @@ class LLMClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
     
-    def chat(self, model: str, messages: list, system: str = None,
-             temperature: float = 0.8, max_tokens: int = 2000, 
-             response_format: dict = None) -> str:
-        """Send chat completion to OpenRouter, return response text."""
+    def _make_request(self, model: str, messages: list, system: str = None,
+                      temperature: float = 0.8, max_tokens: int = 2000,
+                      response_format: dict = None) -> str:
+        """Send a single chat completion request, return response text or empty string."""
         payload = {
             "model": model,
             "messages": messages,
@@ -70,6 +70,23 @@ class LLMClient:
         if content is None:
             # Some models return null content (rate limits, degenerate responses)
             return ""
+        return content
+
+    def chat(self, model: str, messages: list, system: str = None,
+             temperature: float = 0.8, max_tokens: int = 2000, 
+             response_format: dict = None,
+             fallback_model: str = None) -> str:
+        """Send chat completion to OpenRouter, return response text.
+        
+        If fallback_model is provided and the primary model returns empty content,
+        retry with the fallback model automatically."""
+        content = self._make_request(model, messages, system, temperature,
+                                     max_tokens, response_format)
+        
+        if not content and fallback_model and fallback_model != model:
+            content = self._make_request(fallback_model, messages, system,
+                                         temperature, max_tokens, response_format)
+        
         return content
 
 # ─── Engine Bridge (subprocess) ─────────────────────────────────────
@@ -182,13 +199,15 @@ class DiplomacyAgent:
     """One country played by an LLM."""
     
     def __init__(self, player_id: str, config: dict, global_instructions: str,
-                 llm: LLMClient, bridge: EngineBridge):
+                 llm: LLMClient, bridge: EngineBridge,
+                 fallback_model: str = None):
         self.player_id = player_id
         self.model = config["model"]
         self.country_name = config["country_name"]
         self.persona = config.get("persona", "")
         self.llm = llm
         self.bridge = bridge
+        self.fallback_model = fallback_model
         
         self.system_prompt = global_instructions.replace("{country_name}", self.country_name)
         if self.persona:
@@ -268,6 +287,7 @@ Respond with a JSON array of orders. Nothing else."""
             system=self.system_prompt,
             temperature=0.3,
             max_tokens=1000,
+            fallback_model=self.fallback_model,
         )
         return self._parse_json(response)
     
@@ -316,6 +336,7 @@ Respond with JSON array only."""
             system=self.system_prompt,
             temperature=0.5,
             max_tokens=500,
+            fallback_model=self.fallback_model,
         )
         return self._parse_json(response)
     
@@ -402,6 +423,7 @@ Your response:"""
             system=self.system_prompt,
             temperature=0.9,
             max_tokens=300,
+            fallback_model=self.fallback_model,
         )
         
         if not response:
@@ -454,6 +476,7 @@ Your response:"""
                 system=self.system_prompt,
                 temperature=0.9,
                 max_tokens=200,
+                fallback_model=self.fallback_model,
             )
             
             if not response:
@@ -508,6 +531,7 @@ Choice:"""
             system=self.system_prompt,
             temperature=0.3,
             max_tokens=20,
+            fallback_model=self.fallback_model,
         )
         
         response = response.strip().upper()
@@ -635,9 +659,11 @@ class Orchestrator:
         self.bridge = EngineBridge()
         
         self.agents = {}
+        fallback_model = self.game_cfg.get("fallback_model")
         for pid, acfg in config["agents"].items():
             self.agents[pid] = DiplomacyAgent(
-                pid, acfg, config["global_instructions"], self.llm, self.bridge
+                pid, acfg, config["global_instructions"], self.llm, self.bridge,
+                fallback_model=fallback_model,
             )
         
         self.neg_window = self.game_cfg["negotiation_window_seconds"]
@@ -892,6 +918,7 @@ Respond with JSON array only."""
                     system=agent.system_prompt,
                     temperature=0.3,
                     max_tokens=500,
+                    fallback_model=agent.fallback_model,
                 )
                 
                 builds = agent._parse_json(response)

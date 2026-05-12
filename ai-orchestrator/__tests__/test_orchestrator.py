@@ -9,6 +9,8 @@ import sys
 import os
 import tempfile
 import unittest
+import urllib.request
+from unittest import mock
 
 # Add the orchestrator directory to path so we can import from orchestrator
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -414,6 +416,176 @@ class TestChatMessageSanitization(unittest.TestCase):
         result = self.agent._sanitize_chat_message(text)
         self.assertNotIn("[{", result, "JSON prefix should be stripped")
         self.assertIn("Austria welcomes", result, "Text after JSON should remain")
+
+
+class TestLLMFallback(unittest.TestCase):
+    """Test that LLMClient retries with fallback model when primary returns empty."""
+
+    def setUp(self):
+        self.client = LLMClient("fake-key")
+        self.call_count = 0
+        self.request_bodies = []
+
+    def _make_mock_urlopen(self, responses):
+        """Create a mock urlopen that returns successive responses."""
+        response_index = [0]
+
+        class MockResponse:
+            def __init__(self, body):
+                self._body = body
+            def read(self):
+                return self._body.encode("utf-8") if isinstance(self._body, str) else json.dumps(self._body).encode("utf-8")
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+
+        def mock_urlopen(req, timeout=None):
+            idx = response_index[0]
+            response_index[0] += 1
+            body = req.data.decode("utf-8") if isinstance(req.data, bytes) else req.data
+            self.request_bodies.append(json.loads(body))
+            if idx < len(responses):
+                return MockResponse(responses[idx])
+            return MockResponse(responses[-1])
+
+        return mock_urlopen
+
+    def test_fallback_retries_when_primary_returns_null_content(self):
+        """When primary model returns null content, fallback model should be tried."""
+        responses = [
+            # Primary model returns null content
+            {"choices": [{"message": {"content": None}}]},
+            # Fallback model returns valid content
+            {"choices": [{"message": {"content": "Move to BUR"}}]},
+        ]
+
+        with mock.patch("urllib.request.urlopen",
+                                  self._make_mock_urlopen(responses)):
+            result = self.client.chat(
+                model="stepfun/step-3.5-flash",
+                messages=[{"role": "user", "content": "What to do?"}],
+                fallback_model="deepseek/deepseek-v4-flash",
+            )
+
+        self.assertEqual(result, "Move to BUR")
+        self.assertEqual(len(self.request_bodies), 2,
+                         "Should make 2 calls: primary then fallback")
+        self.assertEqual(self.request_bodies[0]["model"], "stepfun/step-3.5-flash")
+        self.assertEqual(self.request_bodies[1]["model"], "deepseek/deepseek-v4-flash")
+
+    def test_fallback_retries_when_primary_returns_empty_string(self):
+        """When primary model returns empty string, fallback should be tried."""
+        responses = [
+            {"choices": [{"message": {"content": ""}}]},
+            {"choices": [{"message": {"content": "HOLD"}}]},
+        ]
+
+        with mock.patch("urllib.request.urlopen",
+                                  self._make_mock_urlopen(responses)):
+            result = self.client.chat(
+                model="xiaomi/mimo-v2-flash",
+                messages=[{"role": "user", "content": "Orders?"}],
+                fallback_model="deepseek/deepseek-v4-flash",
+            )
+
+        self.assertEqual(result, "HOLD")
+        self.assertEqual(len(self.request_bodies), 2)
+
+    def test_no_fallback_when_primary_succeeds(self):
+        """When primary model returns valid content, no fallback call is made."""
+        responses = [
+            {"choices": [{"message": {"content": "Valid response"}}]},
+        ]
+
+        with mock.patch("urllib.request.urlopen",
+                                  self._make_mock_urlopen(responses)):
+            result = self.client.chat(
+                model="openai/gpt-5.4-nano",
+                messages=[{"role": "user", "content": "Test"}],
+                fallback_model="deepseek/deepseek-v4-flash",
+            )
+
+        self.assertEqual(result, "Valid response")
+        self.assertEqual(len(self.request_bodies), 1,
+                         "Should only call primary model once")
+
+    def test_no_fallback_when_no_fallback_model_provided(self):
+        """Without fallback_model, empty response is returned as-is."""
+        responses = [
+            {"choices": [{"message": {"content": None}}]},
+        ]
+
+        with mock.patch("urllib.request.urlopen",
+                                  self._make_mock_urlopen(responses)):
+            result = self.client.chat(
+                model="stepfun/step-3.5-flash",
+                messages=[{"role": "user", "content": "Test"}],
+            )
+
+        self.assertEqual(result, "")
+        self.assertEqual(len(self.request_bodies), 1)
+
+    def test_fallback_still_returns_empty_if_both_fail(self):
+        """If both primary and fallback return empty, return empty string."""
+        responses = [
+            {"choices": [{"message": {"content": None}}]},
+            {"choices": [{"message": {"content": ""}}]},
+        ]
+
+        with mock.patch("urllib.request.urlopen",
+                                  self._make_mock_urlopen(responses)):
+            result = self.client.chat(
+                model="stepfun/step-3.5-flash",
+                messages=[{"role": "user", "content": "Test"}],
+                fallback_model="deepseek/deepseek-v4-flash",
+            )
+
+        self.assertEqual(result, "")
+        self.assertEqual(len(self.request_bodies), 2)
+
+
+class TestFallbackConfig(unittest.TestCase):
+    """Test that fallback_model is loaded from config."""
+
+    def test_fallback_model_loads_from_game_config(self):
+        """Custom config with fallback_model should be accessible."""
+        custom = {
+            "game": {
+                "server_url": "http://localhost:3000",
+                "negotiation_window_seconds": 60,
+                "max_negotiation_messages_per_agent": 5,
+                "max_years": 10,
+                "fallback_model": "deepseek/deepseek-v4-flash",
+            },
+            "global_instructions": "Custom {country_name}",
+            "agents": {
+                "england": {
+                    "model": "openai/gpt-4o",
+                    "country_name": "England",
+                    "persona": "Test",
+                },
+            },
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(custom, f)
+            path = f.name
+
+        try:
+            config = load_config(path)
+            self.assertEqual(
+                config["game"].get("fallback_model"),
+                "deepseek/deepseek-v4-flash",
+            )
+        finally:
+            os.unlink(path)
+
+    def test_default_config_has_fallback_model(self):
+        """Default agents.json should have a fallback_model."""
+        config = load_config()
+        fallback = config["game"].get("fallback_model")
+        self.assertIsNotNone(fallback, "Default config should have fallback_model")
+        self.assertEqual(fallback, "deepseek/deepseek-v4-flash")
 
 
 if __name__ == "__main__":
