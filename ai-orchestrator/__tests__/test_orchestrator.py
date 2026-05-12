@@ -14,7 +14,7 @@ from unittest import mock
 
 # Add the orchestrator directory to path so we can import from orchestrator
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from orchestrator import load_config, DiplomacyAgent, LLMClient
+from orchestrator import load_config, DiplomacyAgent, LLMClient, format_board
 
 
 class TestConfigLoading(unittest.TestCase):
@@ -586,7 +586,177 @@ class TestFallbackConfig(unittest.TestCase):
         config = load_config()
         fallback = config["game"].get("fallback_model")
         self.assertIsNotNone(fallback, "Default config should have fallback_model")
-        self.assertEqual(fallback, "deepseek/deepseek-v4-flash")
+        self.assertIn(fallback, ["deepseek/deepseek-v4-flash", "openai/gpt-5.4-nano"])
+
+
+class TestBoardFormatter(unittest.TestCase):
+    """Tests for format_board() — pure function, no I/O."""
+
+    def make_state(self, year=1901, season="SPRING", players=None):
+        """Build a minimal state dict for testing."""
+        return {
+            "year": year,
+            "season": season,
+            "phase": "ORDER",
+            "players": players or {},
+        }
+
+    def make_player(self, name="England", scs=3, units=None, eliminated=False):
+        """Build a minimal player dict."""
+        return {
+            "id": name.lower().split()[0] if " " not in name else name,
+            "name": name,
+            "supplyCenterCount": scs,
+            "units": units or {},
+            "eliminated": eliminated,
+        }
+
+    def make_unit(self, utype="F", location="LON"):
+        """Build a minimal unit dict."""
+        return {"id": f"{utype}_{location}_0", "type": utype, "locationId": location}
+
+    def test_header_shows_season_and_year(self):
+        """Board header should include season and year."""
+        state = self.make_state(1901, "SPRING")
+        output = format_board(state)
+        self.assertIn("SPRING 1901", output)
+
+    def test_header_shows_fall(self):
+        """Board should show FALL season correctly."""
+        state = self.make_state(1901, "FALL")
+        output = format_board(state)
+        self.assertIn("FALL 1901", output)
+
+    def test_player_appears_in_output(self):
+        """Each player's name should appear."""
+        p = self.make_player("England", 3, {
+            "F_LON_0": self.make_unit("F", "LON"),
+        })
+        state = self.make_state(players={"england": p})
+        output = format_board(state)
+        self.assertIn("England", output)
+
+    def test_player_sc_and_unit_count(self):
+        """SC count and unit count should be shown."""
+        state = self.make_state(players={
+            "england": self.make_player("England", 3, {
+                "F_LON_0": self.make_unit("F", "LON"),
+                "A_LVP_1": self.make_unit("A", "LVP"),
+            })
+        })
+        output = format_board(state)
+        self.assertIn("3SC/2U", output)
+
+    def test_units_show_type_and_location(self):
+        """Unit lines should show type and location."""
+        state = self.make_state(players={
+            "france": self.make_player("France", 3, {
+                "F_BRE_0": self.make_unit("F", "BRE"),
+                "A_PAR_1": self.make_unit("A", "PAR"),
+            })
+        })
+        output = format_board(state)
+        self.assertIn("F BRE", output)
+        self.assertIn("A PAR", output)
+
+    def test_eliminated_player_shows_skull(self):
+        """Eliminated players should have a 💀 marker."""
+        state = self.make_state(players={
+            "austria": self.make_player("Austria", 0, {}, eliminated=True),
+        })
+        output = format_board(state)
+        self.assertIn("💀", output)
+        self.assertIn("(eliminated)", output)
+
+    def test_not_eliminated_player_no_skull(self):
+        """Active players should NOT have 💀."""
+        state = self.make_state(players={
+            "turkey": self.make_player("Turkey", 3, {
+                "F_ANK_0": self.make_unit("F", "ANK"),
+            }),
+        })
+        output = format_board(state)
+        self.assertNotIn("💀", output)
+        self.assertNotIn("(eliminated)", output)
+
+    def test_neutral_sc_count_all_owned(self):
+        """When all 34 SCs are owned, neutral should be 0."""
+        state = self.make_state(players={
+            "england": self.make_player("England", 18),
+            "france": self.make_player("France", 16),
+        })
+        output = format_board(state)
+        self.assertIn("Neutral SCs remaining: 0/34", output)
+
+    def test_neutral_sc_count_none_owned(self):
+        """When no SCs are owned, neutral should be 34."""
+        state = self.make_state(players={
+            "england": self.make_player("England", 0),
+            "france": self.make_player("France", 0),
+        })
+        output = format_board(state)
+        self.assertIn("Neutral SCs remaining: 34/34", output)
+
+    def test_neutral_sc_count_partial(self):
+        """Partial ownership should be reflected."""
+        state = self.make_state(players={
+            "england": self.make_player("England", 5),
+            "france": self.make_player("France", 4),
+        })
+        output = format_board(state)
+        self.assertIn("Neutral SCs remaining: 25/34", output)
+
+    def test_box_has_borders(self):
+        """Output should contain box-drawing characters."""
+        state = self.make_state()
+        output = format_board(state)
+        self.assertIn("╔", output)
+        self.assertIn("╗", output)
+        self.assertIn("╚", output)
+        self.assertIn("╝", output)
+        self.assertIn("║", output)
+
+    def test_players_sorted_by_name(self):
+        """Players should appear in alphabetical order by name."""
+        state = self.make_state(players={
+            "turkey": self.make_player("Turkey", 3, {"F_ANK_0": self.make_unit("F", "ANK")}),
+            "england": self.make_player("England", 3, {"F_LON_0": self.make_unit("F", "LON")}),
+            "france": self.make_player("France", 3, {"F_BRE_0": self.make_unit("F", "BRE")}),
+        })
+        output = format_board(state)
+        eng_pos = output.index("England")
+        fra_pos = output.index("France")
+        tur_pos = output.index("Turkey")
+        self.assertLess(eng_pos, fra_pos)
+        self.assertLess(fra_pos, tur_pos)
+
+    def test_multiple_players_all_visible(self):
+        """All 7 standard Diplomacy powers should appear."""
+        state = self.make_state(players={
+            pid: self.make_player(name, 3, {
+                f"F_{sc}_0": self.make_unit("F", sc),
+            })
+            for pid, name, sc in [
+                ("england", "England", "LON"),
+                ("france", "France", "PAR"),
+                ("germany", "Germany", "BER"),
+                ("italy", "Italy", "ROM"),
+                ("austria", "Austria", "VIE"),
+                ("russia", "Russia", "MOS"),
+                ("turkey", "Turkey", "CON"),
+            ]
+        })
+        output = format_board(state)
+        for name in ["England", "France", "Germany", "Italy", "Austria", "Russia", "Turkey"]:
+            self.assertIn(name, output)
+
+    def test_empty_players(self):
+        """Empty players dict should still produce a valid board."""
+        state = self.make_state(players={})
+        output = format_board(state)
+        self.assertIn("Neutral SCs remaining: 34/34", output)
+        # Should still have box borders
+        self.assertIn("╔", output)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ python3 ai-orchestrator/orchestrator.py
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
 pnpm test                          # 127 tests: 112 engine + 15 bridge
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 37 orchestrator tests
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 51 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -111,6 +111,28 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 └─────────────────────────────────────────────────────┘
 ```
 
+## Board Display
+
+After each resolution and after each build phase, the orchestrator prints a compact boxed map to stdout:
+
+```
+╔══════════════════════════════════════════════════╗
+║            BOARD — Spring 1901                   ║
+╠══════════════════════════════════════════════════╣
+║   Austria    3SC/3U │ F TRI  A VIE  A BUD        ║
+║   England    3SC/3U │ F EDI  F LON  A LVP        ║
+║   France     3SC/3U │ F BRE  A PAR  A MAR        ║
+║   Germany    3SC/3U │ A BER  F KIE  A MUN        ║
+║   Italy      3SC/3U │ F NAP  A ROM  A VEN        ║
+║   Russia     4SC/4U │ F STP  A MOS  A WAR  A SEV ║
+║   Turkey     3SC/3U │ F ANK  A CON  A SMY        ║
+╠══════════════════════════════════════════════════╣
+║         Neutral SCs remaining: 12/34             ║
+╚══════════════════════════════════════════════════╝
+```
+
+For each power: eliminated status (💀), name, supply center count, unit count, and every unit with type + location. Eliminated powers show "(eliminated)". The box auto-sizes to fit the widest line. The `format_board()` function is a pure function (no I/O) and is tested independently.
+
 ## Configuration (agents.json)
 
 ```json
@@ -169,7 +191,7 @@ Other popular options: `anthropic/claude-sonnet-4`, `openai/gpt-4o`, `google/gem
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
 | `agents.json` | Country → OpenRouter model + persona + fallback_model + game settings |
 | `__tests__/engine-bridge.test.ts` | 14 tests for the JSON-line bridge protocol |
-| `__tests__/test_orchestrator.py` | 37 tests: config, parsing, prompts, fallback model, chat sanitization |
+| `__tests__/test_orchestrator.py` | 51 tests: config, parsing, prompts, fallback model, chat sanitization, board display |
 
 ## Troubleshooting
 

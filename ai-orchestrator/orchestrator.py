@@ -679,6 +679,60 @@ Choice:"""
         result = " ".join(cleaned).strip()
         return result
 
+# ─── Board Formatter ─────────────────────────────────────────────────
+
+def format_board(state: dict) -> str:
+    """Format game state as a compact boxed text map. Pure function, no I/O."""
+    players = state.get("players", {})
+
+    # Build all lines first to compute width
+    lines = []
+    header = f" BOARD — {state.get('season','?')} {state.get('year','?')} "
+    lines.append(header)
+
+    sorted_players = sorted(players.items(), key=lambda x: x[1].get("name", x[0]))
+    for pid, p in sorted_players:
+        name = p.get("name", pid)
+        scs = p.get("supplyCenterCount", 0)
+        player_units = p.get("units", {})
+
+        unit_strs = []
+        for uid, u in sorted(player_units.items(), key=lambda x: x[1].get("locationId", "")):
+            unit_strs.append(f"{u.get('type','?')} {u.get('locationId','?')}")
+        units_line = "  ".join(unit_strs) if unit_strs else "(eliminated)"
+        status = "💀" if p.get("eliminated") else " "
+        lines.append(f" {status} {name:<10} {scs}SC/{len(player_units)}U │ {units_line}")
+
+    total_scs = sum(p.get("supplyCenterCount", 0) for p in players.values())
+    neutral = 34 - total_scs
+    footer = f" Neutral SCs remaining: {neutral}/34 "
+    lines.append(footer)
+
+    # Compute box width (min 50)
+    inner_w = max(max(len(l) for l in lines), 50)
+
+    result_lines = []
+    result_lines.append("")  # leading blank line
+
+    # Top border + header
+    pad_top = (inner_w - len(header)) // 2
+    result_lines.append(f"╔{'═' * inner_w}╗")
+    result_lines.append(f"║{' ' * pad_top}{header}{' ' * (inner_w - len(header) - pad_top)}║")
+    result_lines.append(f"╠{'═' * inner_w}╣")
+
+    # Player lines
+    for line in lines[1:-1]:  # skip header and footer
+        result_lines.append(f"║{line}{' ' * (inner_w - len(line))}║")
+
+    # Footer
+    pad_foot = (inner_w - len(footer)) // 2
+    result_lines.append(f"╠{'═' * inner_w}╣")
+    result_lines.append(f"║{' ' * pad_foot}{footer}{' ' * (inner_w - len(footer) - pad_foot)}║")
+    result_lines.append(f"╚{'═' * inner_w}╝")
+    result_lines.append("")  # trailing blank line
+
+    return "\n".join(result_lines)
+
 # ─── Orchestrator ───────────────────────────────────────────────────
 
 class Orchestrator:
@@ -745,6 +799,7 @@ class Orchestrator:
                     self._run_order_phase()
                     result = self.bridge.resolve()
                     self._show_resolution(result)
+                    self._print_board()
                     
                     if result.get("winner"):
                         print(f"\n{'=' * 60}")
@@ -758,6 +813,7 @@ class Orchestrator:
                 elif phase == "BUILD":
                     self._run_build_phase(state)
                     self.bridge.advance_builds()
+                    self._print_board()
                 
                 else:
                     print(f"  Unknown phase: {phase}")
@@ -765,6 +821,12 @@ class Orchestrator:
         finally:
             self.bridge.shutdown()
     
+    def _print_board(self):
+        """Print a compact text map of the current board state."""
+        state = self.bridge.get_state()
+        print(format_board(state))
+        print()
+
     def _run_placement_phase(self):
         print(f"\n  🎯 PLACEMENT — Each power chooses its starting positions")
         print(f"  (Armies vs Fleets — strategic opening decisions)")

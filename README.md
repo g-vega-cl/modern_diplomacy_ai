@@ -198,7 +198,7 @@ pnpm play          # Terminal CLI (human vs human)
 pnpm build         # TypeScript check
 
 # Python orchestrator tests
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 37 Python tests
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 51 Python tests
 
 # Full AI game
 python3 ai-orchestrator/orchestrator.py  # 7 AI agents (needs OPENROUTER_API_KEY)
@@ -312,7 +312,7 @@ ai-orchestrator/
 
 ```bash
 pnpm test              # 127 tests (80 engine + 32 negotiation + 15 bridge)
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 37 Python tests
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 51 Python tests
 ```
 
 ---

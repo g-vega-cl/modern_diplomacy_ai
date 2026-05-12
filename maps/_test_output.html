@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diplomacy — Order Phase — SPRING 1901</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; color: #eee; font-family: Georgia, serif; display: flex; flex-direction: column; align-items: center; padding: 20px; min-height: 100vh; }
+    .header { text-align: center; margin-bottom: 15px; }
+    .header h1 { font-size: 24px; color: #e0c068; margin-bottom: 4px; }
+    .header .subtitle { font-size: 14px; color: #aaa; }
+    .map-container { background: #f5f0e8; border-radius: 8px; padding: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); max-width: 920px; width: 100%; }
+    .map-container svg { width: 100%; height: auto; }
+    .stats { margin-top: 15px; max-width: 920px; width: 100%; }
+    .stats table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 6px; overflow: hidden; }
+    .stats th, .stats td { padding: 6px 12px; text-align: left; border-bottom: 1px solid #2a2a4a; font-size: 13px; }
+    .stats th { background: #0f3460; color: #e0c068; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .winner-banner { background: #e0c068; color: #1a1a2e; text-align: center; padding: 10px; font-size: 18px; font-weight: bold; border-radius: 6px; margin-bottom: 15px; max-width: 920px; width: 100%; }
+  </style>
+</head>
+<body>
+  
+  <div class="header">
+    <h1>Diplomacy Map</h1>
+    <div class="subtitle">Order Phase — SPRING 1901</div>
+  </div>
+  <div class="map-container">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 680" width="900" height="680">
+  <rect width="900" height="680" fill="#f5f0e8"/>
+  <text x="450" y="24" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="#333">Order Phase — SPRING 1901</text>
+  <circle cx="400" cy="460" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="400" y="483" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Adriatic Sea</text>
+  <circle cx="510" cy="550" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="510" y="573" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Aegean Sea</text>
+  <circle cx="350" cy="195" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="350" y="218" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Baltic Sea</text>
+  <circle cx="420" cy="15" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="420" y="38" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Barents Sea</text>
+  <circle cx="555" cy="420" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="555" y="443" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Black Sea</text>
+  <circle cx="575" cy="570" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="575" y="593" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Eastern Mediterranean</text>
+  <circle cx="160" cy="270" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="160" y="293" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">English Channel</text>
+  <circle cx="400" cy="140" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="400" y="163" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Gulf of Bothnia</text>
+  <circle cx="220" cy="490" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="220" y="513" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Gulf of Lyon</text>
+  <circle cx="270" cy="215" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="270" y="238" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Heligoland Bight</text>
+  <circle cx="420" cy="560" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="420" y="583" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Ionian Sea</text>
+  <circle cx="90" cy="190" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="90" y="213" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Irish Sea</text>
+  <circle cx="60" cy="340" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="60" y="363" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Mid-Atlantic Ocean</text>
+  <circle cx="50" cy="80" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="50" y="103" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">North Atlantic Ocean</text>
+  <circle cx="240" cy="150" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="240" y="173" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">North Sea</text>
+  <circle cx="180" cy="50" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="180" y="73" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Norwegian Sea</text>
+  <circle cx="280" cy="130" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="280" y="153" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Skagerrak</text>
+  <circle cx="300" cy="555" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="300" y="578" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Tyrrhenian Sea</text>
+  <circle cx="190" cy="565" r="14" fill="#a8d8ea" stroke="#6aa5c0" stroke-width="1.5"/>
+  <text x="190" y="588" text-anchor="middle" font-family="monospace" font-size="6.5" fill="#5a8099" font-style="italic">Western Mediterranean</text>
+  <circle cx="150" cy="100" r="16" fill="#d4356c" stroke="#9b1547" stroke-width="1.5"/>
+  <text x="150" y="101" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="150" y="125" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">EDI</text>
+  <circle cx="135" cy="160" r="16" fill="#d4356c" stroke="#9b1547" stroke-width="1.5"/>
+  <text x="135" y="161" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="135" y="185" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">LVP</text>
+  <circle cx="190" cy="230" r="16" fill="#d4356c" stroke="#9b1547" stroke-width="1.5"/>
+  <text x="190" y="231" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="190" y="255" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">LON</text>
+  <circle cx="110" cy="115" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="110" y="138" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">CLY</text>
+  <circle cx="180" cy="155" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="180" y="178" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">YOR</text>
+  <circle cx="140" cy="210" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="140" y="233" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">WAL</text>
+  <circle cx="135" cy="355" r="16" fill="#4b8fd9" stroke="#1e5090" stroke-width="1.5"/>
+  <text x="135" y="356" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="135" y="380" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BRE</text>
+  <circle cx="200" cy="370" r="16" fill="#4b8fd9" stroke="#1e5090" stroke-width="1.5"/>
+  <text x="200" y="371" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="200" y="395" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">PAR</text>
+  <circle cx="235" cy="455" r="16" fill="#4b8fd9" stroke="#1e5090" stroke-width="1.5"/>
+  <text x="235" y="456" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="235" y="480" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">MAR</text>
+  <circle cx="240" cy="370" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="240" y="393" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BUR</text>
+  <circle cx="160" cy="430" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="160" y="453" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">GAS</text>
+  <circle cx="200" cy="315" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="200" y="338" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">PIC</text>
+  <circle cx="355" cy="265" r="16" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="355" y="266" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="355" y="290" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BER</text>
+  <circle cx="295" cy="245" r="16" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="295" y="246" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="295" y="270" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">KIE</text>
+  <circle cx="300" cy="335" r="16" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="300" y="336" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="300" y="360" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">MUN</text>
+  <circle cx="400" cy="255" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="400" y="278" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">PRU</text>
+  <circle cx="255" cy="295" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="255" y="318" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">RUH</text>
+  <circle cx="370" cy="305" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="370" y="328" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SIL</text>
+  <circle cx="345" cy="545" r="16" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="345" y="546" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="345" y="570" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">NAP</text>
+  <circle cx="315" cy="505" r="16" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="315" y="506" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="315" y="530" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">ROM</text>
+  <circle cx="315" cy="405" r="16" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
+  <text x="315" y="406" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="315" y="430" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">VEN</text>
+  <circle cx="375" cy="515" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="375" y="538" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">APU</text>
+  <circle cx="270" cy="425" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="270" y="448" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">PIE</text>
+  <circle cx="290" cy="475" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="290" y="498" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">TUS</text>
+  <circle cx="430" cy="385" r="16" fill="#e53935" stroke="#b71c1c" stroke-width="1.5"/>
+  <text x="430" y="386" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="430" y="410" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BUD</text>
+  <circle cx="355" cy="425" r="16" fill="#e53935" stroke="#b71c1c" stroke-width="1.5"/>
+  <text x="355" y="426" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="355" y="450" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">TRI</text>
+  <circle cx="365" cy="365" r="16" fill="#e53935" stroke="#b71c1c" stroke-width="1.5"/>
+  <text x="365" y="366" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="365" y="390" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">VIE</text>
+  <circle cx="345" cy="335" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="345" y="358" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BOH</text>
+  <circle cx="440" cy="345" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="440" y="368" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">GAL</text>
+  <circle cx="310" cy="380" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="310" y="403" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">TYR</text>
+  <circle cx="520" cy="200" r="16" fill="#f9a825" stroke="#c78200" stroke-width="1.5"/>
+  <text x="520" y="201" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="520" y="225" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">MOS</text>
+  <circle cx="540" cy="370" r="16" fill="#f9a825" stroke="#c78200" stroke-width="1.5"/>
+  <text x="540" y="371" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="540" y="395" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SEV</text>
+  <circle cx="465" cy="55" r="16" fill="#f9a825" stroke="#c78200" stroke-width="1.5"/>
+  <text x="465" y="56" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="465" y="80" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">STP</text>
+  <circle cx="435" cy="300" r="16" fill="#f9a825" stroke="#c78200" stroke-width="1.5"/>
+  <text x="435" y="301" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="435" y="325" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">WAR</text>
+  <circle cx="430" cy="95" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="430" y="118" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">FIN</text>
+  <circle cx="445" cy="190" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="445" y="213" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">LVN</text>
+  <circle cx="495" cy="340" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="495" y="363" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">UKR</text>
+  <circle cx="575" cy="475" r="16" fill="#e6c235" stroke="#b8981a" stroke-width="1.5"/>
+  <text x="575" y="476" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="575" y="500" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">ANK</text>
+  <circle cx="525" cy="505" r="16" fill="#e6c235" stroke="#b8981a" stroke-width="1.5"/>
+  <text x="525" y="506" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="525" y="530" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">CON</text>
+  <circle cx="555" cy="545" r="16" fill="#e6c235" stroke="#b8981a" stroke-width="1.5"/>
+  <text x="555" y="546" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="555" y="570" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SMY</text>
+  <circle cx="610" cy="445" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="610" y="468" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">ARM</text>
+  <circle cx="600" cy="535" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="600" y="558" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SYR</text>
+  <circle cx="225" cy="305" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="225" y="306" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="225" y="330" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BEL</text>
+  <circle cx="475" cy="475" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="475" y="476" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="475" y="500" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">BUL</text>
+  <circle cx="300" cy="195" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="300" y="196" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="300" y="220" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">DEN</text>
+  <circle cx="450" cy="535" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="450" y="536" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="450" y="560" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">GRE</text>
+  <circle cx="245" cy="265" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="245" y="266" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="245" y="290" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">HOL</text>
+  <circle cx="265" cy="70" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="265" y="71" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="265" y="95" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">NWY</text>
+  <circle cx="55" cy="505" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="55" y="506" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="55" y="530" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">POR</text>
+  <circle cx="475" cy="410" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="475" y="411" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="475" y="435" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">RUM</text>
+  <circle cx="420" cy="445" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="420" y="446" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="420" y="470" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SER</text>
+  <circle cx="125" cy="495" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="125" y="496" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="125" y="520" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SPA</text>
+  <circle cx="330" cy="105" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="330" y="106" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="330" y="130" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SWE</text>
+  <circle cx="295" cy="615" r="16" fill="#d4c5a9" stroke="#8b7d6b" stroke-width="1.5"/>
+  <text x="295" y="616" text-anchor="middle" dominant-baseline="central" font-size="6" fill="#555">★</text>
+  <text x="295" y="640" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">TUN</text>
+  <circle cx="420" cy="505" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="420" y="528" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">ALB</text>
+  <circle cx="280" cy="410" r="14" fill="#e8e0d0" stroke="#c0b898" stroke-width="1.5"/>
+  <text x="280" y="433" text-anchor="middle" font-family="monospace" font-size="7" fill="#444">SWI</text>
+  <circle cx="140" cy="475" r="3" fill="#888" stroke="#666" stroke-width="0.5"/>
+  <text x="160" y="478" font-family="monospace" font-size="6" fill="#777">NC</text>
+  <circle cx="105" cy="520" r="3" fill="#888" stroke="#666" stroke-width="0.5"/>
+  <text x="85" y="523" font-family="monospace" font-size="6" fill="#777">SC</text>
+  <circle cx="455" cy="30" r="3" fill="#888" stroke="#666" stroke-width="0.5"/>
+  <text x="435" y="33" font-family="monospace" font-size="6" fill="#777">NC</text>
+  <circle cx="475" cy="70" r="3" fill="#888" stroke="#666" stroke-width="0.5"/>
+  <text x="495" y="73" font-family="monospace" font-size="6" fill="#777">SC</text>
+  <circle cx="500" cy="470" r="3" fill="#888" stroke="#666" stroke-width="0.5"/>
+  <text x="520" y="473" font-family="monospace" font-size="6" fill="#777">EC</text>
+  <circle cx="475" cy="505" r="3" fill="#888" stroke="#666" stroke-width="0.5"/>
+  <text x="455" y="508" font-family="monospace" font-size="6" fill="#777">SC</text>
+  <rect x="144" y="95" width="12" height="10" rx="2" fill="#d4356c" stroke="#9b1547" stroke-width="1"/>
+  <text x="150" y="101" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="184" y="225" width="12" height="10" rx="2" fill="#d4356c" stroke="#9b1547" stroke-width="1"/>
+  <text x="190" y="231" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="129" y="155" width="12" height="10" rx="2" fill="#d4356c" stroke="#9b1547" stroke-width="1"/>
+  <text x="135" y="161" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="194" y="365" width="12" height="10" rx="2" fill="#4b8fd9" stroke="#1e5090" stroke-width="1"/>
+  <text x="200" y="371" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="229" y="450" width="12" height="10" rx="2" fill="#4b8fd9" stroke="#1e5090" stroke-width="1"/>
+  <text x="235" y="456" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="129" y="350" width="12" height="10" rx="2" fill="#4b8fd9" stroke="#1e5090" stroke-width="1"/>
+  <text x="135" y="356" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="349" y="260" width="12" height="10" rx="2" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="1"/>
+  <text x="355" y="266" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="294" y="330" width="12" height="10" rx="2" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="1"/>
+  <text x="300" y="336" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="289" y="240" width="12" height="10" rx="2" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="1"/>
+  <text x="295" y="246" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="309" y="500" width="12" height="10" rx="2" fill="#4caf50" stroke="#2e7d32" stroke-width="1"/>
+  <text x="315" y="506" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="309" y="400" width="12" height="10" rx="2" fill="#4caf50" stroke="#2e7d32" stroke-width="1"/>
+  <text x="315" y="406" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="339" y="540" width="12" height="10" rx="2" fill="#4caf50" stroke="#2e7d32" stroke-width="1"/>
+  <text x="345" y="546" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="359" y="360" width="12" height="10" rx="2" fill="#e53935" stroke="#b71c1c" stroke-width="1"/>
+  <text x="365" y="366" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="349" y="420" width="12" height="10" rx="2" fill="#e53935" stroke="#b71c1c" stroke-width="1"/>
+  <text x="355" y="426" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="424" y="380" width="12" height="10" rx="2" fill="#e53935" stroke="#b71c1c" stroke-width="1"/>
+  <text x="430" y="386" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="514" y="195" width="12" height="10" rx="2" fill="#f9a825" stroke="#c78200" stroke-width="1"/>
+  <text x="520" y="201" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="459" y="50" width="12" height="10" rx="2" fill="#f9a825" stroke="#c78200" stroke-width="1"/>
+  <text x="465" y="56" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="534" y="365" width="12" height="10" rx="2" fill="#f9a825" stroke="#c78200" stroke-width="1"/>
+  <text x="540" y="371" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="429" y="295" width="12" height="10" rx="2" fill="#f9a825" stroke="#c78200" stroke-width="1"/>
+  <text x="435" y="301" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="519" y="500" width="12" height="10" rx="2" fill="#e6c235" stroke="#b8981a" stroke-width="1"/>
+  <text x="525" y="506" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">F</text>
+  <rect x="569" y="470" width="12" height="10" rx="2" fill="#e6c235" stroke="#b8981a" stroke-width="1"/>
+  <text x="575" y="476" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="549" y="540" width="12" height="10" rx="2" fill="#e6c235" stroke="#b8981a" stroke-width="1"/>
+  <text x="555" y="546" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="7" font-weight="bold" fill="#fff">A</text>
+  <rect x="10" y="653" width="10" height="10" rx="2" fill="#e53935" stroke="#b71c1c" stroke-width="0.5"/>
+  <text x="23" y="659" font-family="sans-serif" font-size="8" fill="#333">Austria</text>
+  <rect x="95" y="653" width="10" height="10" rx="2" fill="#d4356c" stroke="#9b1547" stroke-width="0.5"/>
+  <text x="108" y="659" font-family="sans-serif" font-size="8" fill="#333">England</text>
+  <rect x="180" y="653" width="10" height="10" rx="2" fill="#4b8fd9" stroke="#1e5090" stroke-width="0.5"/>
+  <text x="193" y="659" font-family="sans-serif" font-size="8" fill="#333">France</text>
+  <rect x="265" y="653" width="10" height="10" rx="2" fill="#3d3d3d" stroke="#1a1a1a" stroke-width="0.5"/>
+  <text x="278" y="659" font-family="sans-serif" font-size="8" fill="#333">Germany</text>
+  <rect x="350" y="653" width="10" height="10" rx="2" fill="#4caf50" stroke="#2e7d32" stroke-width="0.5"/>
+  <text x="363" y="659" font-family="sans-serif" font-size="8" fill="#333">Italy</text>
+  <rect x="435" y="653" width="10" height="10" rx="2" fill="#f9a825" stroke="#c78200" stroke-width="0.5"/>
+  <text x="448" y="659" font-family="sans-serif" font-size="8" fill="#333">Russia</text>
+  <rect x="520" y="653" width="10" height="10" rx="2" fill="#e6c235" stroke="#b8981a" stroke-width="0.5"/>
+  <text x="533" y="659" font-family="sans-serif" font-size="8" fill="#333">Turkey</text>
+  <text x="610" y="659" font-family="sans-serif" font-size="7" fill="#888">★ = supply center</text>
+</svg>
+  </div>
+  <div class="stats">
+    <table>
+      <thead><tr><th>Power</th><th>Supply Centers</th><th>Units</th></tr></thead>
+      <tbody><tr><td style="color:#d4356c;font-weight:bold">England</td><td>3 SCs</td><td>3 units</td></tr><tr><td style="color:#4b8fd9;font-weight:bold">France</td><td>3 SCs</td><td>3 units</td></tr><tr><td style="color:#3d3d3d;font-weight:bold">Germany</td><td>3 SCs</td><td>3 units</td></tr><tr><td style="color:#4caf50;font-weight:bold">Italy</td><td>3 SCs</td><td>3 units</td></tr><tr><td style="color:#e53935;font-weight:bold">Austria</td><td>3 SCs</td><td>3 units</td></tr><tr><td style="color:#f9a825;font-weight:bold">Russia</td><td>4 SCs</td><td>4 units</td></tr><tr><td style="color:#e6c235;font-weight:bold">Turkey</td><td>3 SCs</td><td>3 units</td></tr></tbody>
+    </table>
+  </div>
+</body>
+</html>
