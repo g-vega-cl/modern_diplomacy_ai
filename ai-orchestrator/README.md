@@ -19,8 +19,8 @@ python3 ai-orchestrator/orchestrator.py
 
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
-pnpm test                          # 127 tests: 112 engine + 15 bridge
-python3 ai-orchestrator/__tests__/test_orchestrator.py  # 51 orchestrator tests
+pnpm test                          # 128 tests: 112 engine + 16 bridge
+python3 ai-orchestrator/__tests__/test_orchestrator.py  # 54 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -133,6 +133,8 @@ After each resolution and after each build phase, the orchestrator prints a comp
 
 For each power: eliminated status (💀), name, supply center count, unit count, and every unit with type + location. Eliminated powers show "(eliminated)". The box auto-sizes to fit the widest line. The `format_board()` function is a pure function (no I/O) and is tested independently.
 
+**Data contract:** `format_board()` reads each player's `units` dict from the `getState` response. The bridge's `serializeState()` now includes per-player units alongside the top-level `units` map so the board can display which units each power controls.
+
 ## Configuration (agents.json)
 
 ```json
@@ -183,6 +185,18 @@ Current lineup in `agents.json`:
 
 Other popular options: `anthropic/claude-sonnet-4`, `openai/gpt-4o`, `google/gemini-2.5-pro`, `meta-llama/llama-4-maverick`, `deepseek/deepseek-r1`.
 
+## Agent Prompts
+
+Each agent receives a `_get_state_text()` prompt before generating orders. This includes:
+
+- Current year, season, and phase
+- The player's supply center count
+- Each unit with its location, type, and valid MOVE destinations
+- **ORDER OPTIONS reminder:** HOLD (always valid), MOVE (advertised destinations only), SUPPORT (adjacent friendly unit's MOVE or HOLD)
+- Full visible unit list (all units on the board)
+
+This ensures agents know they can HOLD or SUPPORT even when no move destinations are available — without relying on the order-generation prompt to teach the rules from scratch.
+
 ## Files
 
 | File | Purpose |
@@ -190,8 +204,8 @@ Other popular options: `anthropic/claude-sonnet-4`, `openai/gpt-4o`, `google/gem
 | `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry), EngineBridge |
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
 | `agents.json` | Country → OpenRouter model + persona + fallback_model + game settings |
-| `__tests__/engine-bridge.test.ts` | 14 tests for the JSON-line bridge protocol |
-| `__tests__/test_orchestrator.py` | 51 tests: config, parsing, prompts, fallback model, chat sanitization, board display |
+| `__tests__/engine-bridge.test.ts` | 16 tests for the JSON-line bridge protocol |
+| `__tests__/test_orchestrator.py` | 54 tests: config, parsing, prompts, fallback model, chat sanitization, board display, state text |
 
 ## Troubleshooting
 

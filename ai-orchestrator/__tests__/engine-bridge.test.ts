@@ -143,6 +143,27 @@ describe("Engine Bridge", () => {
       expect(findUnit("russia", "STP_NC")).toBeTruthy();
       expect(findUnit("turkey", "CON")).toBeTruthy();
     });
+
+    it("getState returns per-player units for board display", async () => {
+      await placeAllStandardUnits();
+      const state = await call("getState");
+      const players = state.state.players;
+
+      // Each player dict must include a units dict with their units
+      for (const pid of ["england", "france", "germany", "italy", "austria", "russia", "turkey"]) {
+        const p = players[pid];
+        expect(p.units).toBeDefined();
+        expect(typeof p.units).toBe("object");
+        // Russia has 4 units, everyone else has 3
+        const expectedCount = pid === "russia" ? 4 : 3;
+        expect(Object.keys(p.units).length).toBe(expectedCount);
+        // Each unit entry has type and locationId
+        for (const u of Object.values(p.units) as any[]) {
+          expect(u.type).toBeDefined();
+          expect(u.locationId).toBeDefined();
+        }
+      }
+    });
   });
 
   describe("Player view", () => {

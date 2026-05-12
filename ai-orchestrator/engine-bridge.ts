@@ -102,12 +102,17 @@ let state = engine.createGame(); // starts in PLACEMENT — LLMs will decide pla
 function serializeState(s: GameState) {
   const players: Record<string, any> = {};
   for (const [id, p] of s.players) {
+    const playerUnits: Record<string, any> = {};
+    for (const [uid, u] of p.units) {
+      playerUnits[uid] = { id: u.id, type: u.type, locationId: u.locationId };
+    }
     players[id] = {
       id: p.id,
       name: p.name,
       supplyCenterCount: p.supplyCenterCount,
       unitCount: p.units.size,
       eliminated: p.eliminated,
+      units: playerUnits,
     };
   }
   const units: Record<string, any> = {};

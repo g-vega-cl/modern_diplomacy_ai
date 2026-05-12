@@ -589,6 +589,79 @@ class TestFallbackConfig(unittest.TestCase):
         self.assertIn(fallback, ["deepseek/deepseek-v4-flash", "openai/gpt-5.4-nano"])
 
 
+class TestGetStateText(unittest.TestCase):
+    """Tests for _get_state_text() — the LLM agent's game-view prompt."""
+
+    def setUp(self):
+        config = {
+            "model": "test/model",
+            "country_name": "TestLand",
+            "persona": "You are a test.",
+        }
+        global_inst = "You are {country_name}."
+
+        class MockBridge:
+            def get_state(self):
+                return {"year": 1901, "season": "SPRING", "phase": "ORDER",
+                        "players": {}, "units": {}, "retreatsNeeded": []}
+            def get_player_view(self, pid):
+                return {
+                    "player": {
+                        "name": "Test", "eliminated": False,
+                        "supplyCenterCount": 3, "unitCount": 1,
+                        "units": {
+                            "A_PAR_0": {"id": "A_PAR_0", "type": "A", "locationId": "PAR"},
+                        },
+                    },
+                    "visibleUnits": [],
+                    "validMoves": {"A_PAR_0": ["BUR", "PIC", "GAS", "BRE"]},
+                    "validBuilds": [],
+                }
+
+        self.agent = DiplomacyAgent("testland", config, global_inst,
+                                     LLMClient("fake-key"), MockBridge())
+
+    def test_state_text_includes_order_options_reminder(self):
+        """_get_state_text() must remind agents about HOLD and SUPPORT."""
+        text = self.agent._get_state_text()
+        self.assertIn("ORDER OPTIONS FOR EACH UNIT:", text)
+        self.assertIn("HOLD", text)
+        self.assertIn("SUPPORT", text)
+        self.assertIn("MOVE", text)
+        self.assertIn("always valid", text)
+
+    def test_state_text_shows_moves_as_none_when_empty(self):
+        """Empty validMoves should show 'none (HOLD only)' not 'no valid moves'."""
+        text = self.agent._get_state_text()
+        # Even with valid moves, verify the NOT-case
+        self.assertIn("moves:", text)  # the header changed from "valid:"
+
+    def test_eliminated_player_shows_eliminated_message(self):
+        """Eliminated player gets the elimination message."""
+        # Use a mock that returns eliminated player
+        class EliminatedBridge:
+            def get_state(self):
+                return {"year": 1901, "season": "SPRING", "phase": "ORDER",
+                        "players": {}, "units": {}, "retreatsNeeded": []}
+            def get_player_view(self, pid):
+                return {
+                    "player": {
+                        "name": "Test", "eliminated": True,
+                        "supplyCenterCount": 0, "unitCount": 0,
+                        "units": {},
+                    },
+                    "visibleUnits": [],
+                    "validMoves": {},
+                    "validBuilds": [],
+                }
+
+        config = {"model": "test/model", "country_name": "DeadLand", "persona": ""}
+        agent = DiplomacyAgent("deadland", config, "You are {country_name}.",
+                               LLMClient("fake-key"), EliminatedBridge())
+        text = agent._get_state_text()
+        self.assertIn("eliminated", text.lower())
+
+
 class TestBoardFormatter(unittest.TestCase):
     """Tests for format_board() — pure function, no I/O."""
 

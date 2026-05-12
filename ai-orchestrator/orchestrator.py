@@ -244,8 +244,15 @@ class DiplomacyAgent:
         else:
             for uid, u in units.items():
                 moves = valid_moves.get(uid, [])
-                moves_str = ", ".join(moves[:8]) if moves else "no valid moves"
-                parts.append(f"  {uid} at {u.get('locationId', '?')} ({u.get('type', '?')}) → valid: {moves_str}")
+                moves_str = ", ".join(moves[:8]) if moves else "none (HOLD only)"
+                parts.append(f"  {uid} at {u.get('locationId', '?')} ({u.get('type', '?')}) → moves: {moves_str}")
+        
+        # Always remind agents that HOLD and SUPPORT are valid
+        parts.append("")
+        parts.append("ORDER OPTIONS FOR EACH UNIT:")
+        parts.append("  • MOVE to an adjacent territory (listed above)")
+        parts.append("  • HOLD — always valid, even if no moves listed")
+        parts.append("  • SUPPORT — if adjacent to a friendly unit, you can support its MOVE or HOLD")
         
         parts.append("")
         parts.append("=== ALL VISIBLE UNITS ===")
