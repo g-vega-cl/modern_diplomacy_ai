@@ -566,14 +566,18 @@ New messages:
 
 {msgs_text}
 
-Should you respond? If so, write ONLY your in-character message text (1-3 sentences, strategic).
-If you reply, you will respond in the same channel as the last message.
-Or reply with just "PASS" to stay silent.
+Decide whether to respond. If you reply, you will respond in the same channel as the last message.
 
-IMPORTANT: Output ONLY the message text. Do NOT include reasoning, analysis, channel names,
-JSON, or any formatting — just the words your character would say.
+Your response MUST use this exact format:
 
-Your response:"""
+[REASONING]
+Your private internal strategic analysis — NOT seen by other players. Brief, 1-2 sentences.
+
+[MESSAGE]
+Your in-character diplomatic message to send publicly. 1-3 sentences, in your persona's voice.
+Pure roleplay text — no channel names, no JSON, no meta-commentary.
+
+Or reply with just "PASS" (single word) to stay silent."""
         
         response = self.llm.chat(
             model=self.model,
@@ -586,19 +590,29 @@ Your response:"""
         
         if not response:
             return
-        response = response.strip()
-        if response.upper() == "PASS" or not response:
+
+        # Parse reasoning/message sections from the response
+        reasoning, message_text = self._parse_agent_response(response)
+
+        # Log reasoning to terminal
+        if reasoning:
+            self._log_reasoning(self.country_name, reasoning)
+
+        if not message_text:
             return
-        
-        response = self._sanitize_chat_message(response)
-        if not response:
+        message_text = message_text.strip()
+        if message_text.upper() == "PASS":
+            return
+
+        message_text = self._sanitize_chat_message(message_text)
+        if not message_text:
             return
         
         channel_id = recent[-1][0]["id"] if recent else "global"
         try:
-            self.bridge.chat_send(channel_id, self.player_id, self.country_name, response)
+            self.bridge.chat_send(channel_id, self.player_id, self.country_name, message_text)
             self.msg_count += 1
-            short = response[:80].replace("\n", " ")
+            short = message_text[:80].replace("\n", " ")
             print(f"  💬 {self.country_name}: \"{short}...\"", flush=True)
         except Exception as e:
             print(f"  ⚠ {self.country_name} send err: {e}", flush=True)
@@ -622,12 +636,15 @@ or probe another power's intentions. Be in character. 1-2 sentences.
 Available channels:
 {channel_list}
 
-IMPORTANT: Your reply must be EXACTLY two lines.
-First line: the channel ID you want to post in.
-Second line: ONLY your in-character message text — no reasoning, no JSON, no formatting.
+Your response MUST use this exact format:
 
-Your response:"""
-            
+[REASONING]
+Your private internal strategic analysis. Brief, 1-2 sentences.
+
+[MESSAGE]
+First line: the channel ID you want to post in.
+Second line: your in-character diplomatic message text (pure roleplay, no meta-commentary)."""
+
             response = self.llm.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
@@ -639,12 +656,22 @@ Your response:"""
             
             if not response:
                 return
-            response = response.strip()
-            if not response or response.upper() == "PASS":
+
+            # Parse reasoning/message sections
+            reasoning, message_text = self._parse_agent_response(response)
+
+            # Log reasoning to terminal
+            if reasoning:
+                self._log_reasoning(self.country_name, reasoning)
+
+            if not message_text:
+                return
+            message_text = message_text.strip()
+            if not message_text or message_text.upper() == "PASS":
                 return
             
             # Parse: first line = channel ID, rest = message
-            lines = response.split("\n", 1)
+            lines = message_text.split("\n", 1)
             if len(lines) == 2:
                 channel_id = lines[0].strip()
                 message_text = lines[1].strip()
@@ -660,11 +687,81 @@ Your response:"""
                     self.bridge.chat_send(channel_id, self.player_id, self.country_name, message_text)
                     self.msg_count += 1
                     short = message_text[:80].replace("\n", " ")
-                    ch_name = channel_id
-                    print(f"  💬 {self.country_name} (init in {ch_name}): \"{short}...\"", flush=True)
+                    print(f"  💬 {self.country_name} (init in {channel_id}): \"{short}...\"", flush=True)
                 except Exception as e:
                     print(f"  ⚠ {self.country_name} send err: {e}", flush=True)
-    
+
+    # ── Response parsing ──────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_agent_response(raw: str) -> tuple:
+        """Parse [REASONING] and [MESSAGE] sections from LLM response.
+
+        Returns (reasoning_text, message_text). Either may be empty string.
+        If the delimiter format is not found, treats the entire response
+        as the message and returns empty reasoning.
+        """
+        import re
+
+        if not raw:
+            return ("", "")
+
+        raw = raw.strip()
+
+        # Look for [REASONING] ... [MESSAGE] sections (case-insensitive)
+        reasoning_match = re.search(
+            r'\[REASONING\]\s*\n(.*?)(?=\[MESSAGE\]|$)', raw,
+            re.IGNORECASE | re.DOTALL
+        )
+        message_match = re.search(
+            r'\[MESSAGE\]\s*\n(.*?)(?=\[REASONING\]|$)', raw,
+            re.IGNORECASE | re.DOTALL
+        )
+
+        reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
+        message = message_match.group(1).strip() if message_match else ""
+
+        # If delimiter format wasn't found at all, treat whole response as message
+        if not reasoning and not message:
+            return ("", raw)
+
+        return (reasoning, message)
+
+    # ── Reasoning log ─────────────────────────────────────────────────
+
+    # Class-level reasoning log file handle (shared across all agents)
+    _reasoning_log_path = None
+
+    @classmethod
+    def init_reasoning_log(cls, log_dir: str = None):
+        """Open the reasoning log file for the game session."""
+        import datetime
+        if log_dir is None:
+            log_dir = "."
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        cls._reasoning_log_path = os.path.join(log_dir, f"agent_reasoning_{ts}.log")
+        # Write header
+        with open(cls._reasoning_log_path, "w") as f:
+            f.write(f"# AGENT REASONING LOG — {datetime.datetime.now().isoformat()}\n")
+            f.write("# Format: [timestamp] Country: reasoning text\n\n")
+
+    @staticmethod
+    def _log_reasoning(country_name: str, reasoning: str):
+        """Print reasoning to terminal and append to log file."""
+        import datetime
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+
+        # Terminal output
+        print(f"  🧠 {country_name}: {reasoning}", flush=True)
+
+        # File output
+        if DiplomacyAgent._reasoning_log_path:
+            try:
+                with open(DiplomacyAgent._reasoning_log_path, "a") as f:
+                    f.write(f"[{ts}] {country_name}: {reasoning}\n\n")
+            except Exception:
+                pass
+
     def handle_retreat(self, unit_id: str, unit_info: dict) -> str:
         """Returns 'disband' or a location ID."""
         state_text = self._get_state_text()
@@ -791,16 +888,52 @@ Choice:"""
             lower = stripped.lower()
             # Skip lines of meta-reasoning
             if any(phrase in lower for phrase in [
+                # Original patterns
                 "we need to decide",
                 "respond or pass",
                 "should we respond",
                 "let me think",
-                "i should",
                 "i will respond",
                 "the last message",
                 "we are in the",
                 "we should reply",
+                # Patterns from observed leaks (nemotron + others)
+                "we could respond",
+                "we could reply",
+                "might want to respond",
+                "might want to reply",
+                "respond acknowledging",
+                "perhaps we should",
+                "perhaps we could",
+                "shall we respond",
+                "let us respond",
+                "should i respond",
+                "we might respond",
+                "i should respond",
+                "maybe i should respond",
+                "let me respond",
+                "we could send",
+                "we could say",
+                "perhaps respond",
+                "perhaps reply",
+                "we might say",
+                "i could respond",
+                "i could reply",
+                "we should respond",
+                "i think we should",
+                "we could also",
             ]):
+                continue
+            # Skip lines that start like internal deliberation
+            # "We could ... as [Country]" pattern
+            if re.match(r'^(we|i|they|he|she)\s+(could|might|should|would)\s', lower):
+                continue
+            # "[Country] might want to..." pattern
+            if re.match(r'^\w+\s+might\s+(want|need|have)\s+to\s', lower):
+                continue
+            # Self-addressing: "Your Majesty, ..." when it's self-reflection
+            # (too ambiguous to filter reliably, but catch obvious cases)
+            if re.match(r'^(well|hmm|okay|alright|so|now|right|yes|no),?\s', lower):
                 continue
             cleaned.append(stripped)
 
@@ -889,6 +1022,9 @@ class Orchestrator:
         print("=" * 60)
         print()
         
+        # Initialize the reasoning log
+        DiplomacyAgent.init_reasoning_log(SCRIPT_DIR)
+
         self.bridge.reset()
         
         for pid, agent in self.agents.items():
