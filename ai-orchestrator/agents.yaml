@@ -5,8 +5,8 @@
 
 game:
   server_url: "http://localhost:3000"
-  negotiation_window_seconds: 240
-  max_negotiation_messages_per_agent: 15
+  negotiation_window_seconds: 180
+  max_negotiation_messages_per_agent: 10
   max_years: 20  # safety cap
 
 # Global negotiation instructions injected into every agent's system prompt
