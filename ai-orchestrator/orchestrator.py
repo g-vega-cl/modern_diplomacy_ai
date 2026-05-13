@@ -18,6 +18,8 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
+from summary_manager import SummaryManager
+
 # ─── Config ─────────────────────────────────────────────────────────
 
 SCRIPT_DIR = Path(__file__).parent
@@ -300,6 +302,7 @@ class DiplomacyAgent:
         self.max_msgs = 0
         self.running = False
         self.last_poll = 0
+        self.current_summary_text = None  # Set by orchestrator before negotiation
     
     def _get_state_text(self) -> str:
         """Text representation of current game state from this player's perspective."""
@@ -354,6 +357,10 @@ class DiplomacyAgent:
         state_text = self._get_state_text()
 
         initial_prompt = f"""{state_text}
+
+        summary_block = ""
+        if self.current_summary_text:
+            summary_block = f"\n\nYOUR STRATEGIC MEMORY (summary of all prior turns):\n{self.current_summary_text}\n"
 
 Negotiation is over. Use the available tools to explore the board and submit your orders.
 For each of your units, call get_my_units to see them, get_valid_moves to see where each
@@ -578,10 +585,20 @@ Your in-character diplomatic message to send publicly. 1-3 sentences, in your pe
 Pure roleplay text — no channel names, no JSON, no meta-commentary.
 
 Or reply with just "PASS" (single word) to stay silent."""
+
+        summary_block = ""
+        if self.current_summary_text:
+            summary_block = f"""YOUR STRATEGIC MEMORY (summary of all prior turns):
+
+{self.current_summary_text}
+
+"""
+
+        full_prompt = summary_block + prompt
         
         response = self.llm.chat(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": full_prompt}],
             system=self.system_prompt,
             temperature=0.9,
             max_tokens=300,
@@ -645,9 +662,19 @@ Your private internal strategic analysis. Brief, 1-2 sentences.
 First line: the channel ID you want to post in.
 Second line: your in-character diplomatic message text (pure roleplay, no meta-commentary)."""
 
+            summary_block = ""
+            if self.current_summary_text:
+                summary_block = f"""YOUR STRATEGIC MEMORY (summary of all prior turns):
+
+{self.current_summary_text}
+
+"""
+
+            full_prompt = summary_block + prompt
+
             response = self.llm.chat(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": full_prompt}],
                 system=self.system_prompt,
                 temperature=0.9,
                 max_tokens=200,
@@ -1014,6 +1041,10 @@ class Orchestrator:
         self.neg_window = self.game_cfg["negotiation_window_seconds"]
         self.max_msgs = self.game_cfg["max_negotiation_messages_per_agent"]
         self.max_years = self.game_cfg["max_years"]
+        
+        # Cross-turn summary persistence
+        self.summaries = SummaryManager(str(SCRIPT_DIR / "summaries"))
+        self.summaries.wipe_all()
     
     def run(self):
         print("=" * 60)
@@ -1065,6 +1096,9 @@ class Orchestrator:
                     self._show_resolution(result)
                     self._print_board()
                     
+                    
+                    # Generate cross-turn summaries for all agents
+                    self._generate_summaries(state, result)
                     if result.get("winner"):
                         print(f"\n{'=' * 60}")
                         print(f"  🏆 {result['winner']['name']} WINS!")
@@ -1146,6 +1180,14 @@ class Orchestrator:
         self._dm_channels = dm_channels
         print(f"  📨 {len(dm_channels)} private channels created", flush=True)
         
+        # Load cross-turn summaries for all agents
+        for pid, agent in self.agents.items():
+            summary = self.summaries.load(pid)
+            if summary:
+                agent.current_summary_text = json.dumps(summary, indent=2)
+            else:
+                agent.current_summary_text = None
+
         # Start all agents in parallel threads
         threads = []
         for agent in self.agents.values():
@@ -1325,6 +1367,102 @@ class Orchestrator:
         if not marker:
             print("    (no changes)")
 
+
+    def _format_resolution_for_summary(self, resolution: dict) -> str:
+        """Convert resolution dict into a human-readable text block for the LLM."""
+        parts = []
+        moves = resolution.get("successfulMoves", [])
+        bounced = resolution.get("bouncedMoves", [])
+        dislodged = resolution.get("dislodgedUnits", [])
+        destroyed = resolution.get("destroyedUnits", [])
+
+        for m in moves:
+            parts.append(f"  {m['unitId']}: moved from {m['fromLocationId']} -> {m['toLocationId']}")
+        for b in bounced:
+            parts.append(f"  {b['unitId']}: bounced from {b['attemptedLocationId']}")
+        for d in dislodged:
+            parts.append(f"  {d['unitId']}: DISLODGED from {d['fromLocationId']}")
+        for d in destroyed:
+            parts.append(f"  {d}: DESTROYED")
+
+        return "\n".join(parts) if parts else "(no changes)"
+
+    def _get_agent_chat_log(self, player_id: str) -> str:
+        """Collect all chat messages visible to this player for the current turn."""
+        try:
+            channels = self.bridge.chat_get_channels(player_id)
+            lines_list = []
+            for ch in channels:
+                msgs = self.bridge.chat_get_messages(ch["id"])
+                for m in msgs:
+                    sender = m.get("senderName", m.get("senderId", "?"))
+                    cnt = m.get("content", "")[:200]
+                    ch_name = ch.get("name", ch.get("id", "?"))
+                    lines_list.append(f"[{ch_name} -- {sender}]: {cnt}")
+            return "\n".join(lines_list)
+        except Exception:
+            return "(chat log unavailable)"
+
+    def _generate_summaries(self, state, result):
+        """Generate post-resolution summaries for all non-eliminated agents in parallel."""
+        season = state.get("season", "?")
+        year = state.get("year", "?")
+        turn_label = f"{season} {year}"
+
+        resolution = result.get("result", {})
+        resolution_text = self._format_resolution_for_summary(resolution)
+        fallback_model = self.game_cfg.get("fallback_model")
+
+        def summarize_one(agent):
+            try:
+                player = state.get("players", {}).get(agent.player_id, {})
+                if player.get("eliminated"):
+                    return
+
+                chat_log = self._get_agent_chat_log(agent.player_id)
+                board_state = agent._get_state_text()
+                previous = self.summaries.load(agent.player_id)
+
+                summary = self.summaries.generate_summary(
+                    llm=self.llm,
+                    model=agent.model,
+                    country=agent.player_id,
+                    country_name=agent.country_name,
+                    persona=agent.persona,
+                    system_prompt=agent.system_prompt,
+                    turn_label=turn_label,
+                    board_state=board_state,
+                    resolution_text=resolution_text,
+                    chat_log=chat_log,
+                    previous_summary=previous,
+                    fallback_model=fallback_model,
+                )
+
+                if summary:
+                    self.summaries.save(agent.player_id, summary)
+                    print(f"  [summary] {agent.country_name}: summary updated", flush=True)
+                else:
+                    print(f"  [summary] {agent.country_name}: summary generation failed", flush=True)
+            except Exception as e:
+                print(f"  [summary] {agent.country_name}: summary error: {e}", flush=True)
+
+        print("\n  --- GENERATING SUMMARIES (parallel, 120s timeout) ---")
+
+        th_list = []
+        for agent in self.agents.values():
+            t = threading.Thread(target=summarize_one, args=(agent,), daemon=True)
+            t.start()
+            th_list.append(t)
+
+        deadline = time.time() + 120  # 2 minutes
+        for t in th_list:
+            remaining = deadline - time.time()
+            if remaining > 0:
+                t.join(timeout=remaining)
+            if t.is_alive():
+                print(f"  [summary] Summary generation timed out for an agent", flush=True)
+
+        print(f"  [summary] Summaries generated", flush=True)
 
 # ─── Main ───────────────────────────────────────────────────────────
 
