@@ -41,6 +41,80 @@ def load_config(path=None):
 class LLMClient:
     BASE = "https://openrouter.ai/api/v1/chat/completions"
     
+    # ── API request/response logging ───────────────────────────────
+    _api_log_path: str = None
+    
+    @classmethod
+    def init_api_log(cls, log_dir: str = None):
+        """Enable API request/response logging to a debug file."""
+        import datetime
+        if log_dir is None:
+            log_dir = "."
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        cls._api_log_path = os.path.join(log_dir, f"api_debug_{ts}.log")
+        with open(cls._api_log_path, "w") as f:
+            f.write(f"# API DEBUG LOG — {datetime.datetime.now().isoformat()}\n")
+            f.write("# Format: [timestamp] REQUEST/RESPONSE blocks\n\n")
+    
+    @staticmethod
+    def _log_request(model: str, payload: dict):
+        """Write outgoing request to the debug log."""
+        if not LLMClient._api_log_path:
+            return
+        import datetime
+        ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        try:
+            with open(LLMClient._api_log_path, "a") as f:
+                f.write(f"[{ts}] REQUEST model={model} temp={payload.get('temperature')} max_tokens={payload.get('max_tokens')}\n")
+                msgs = payload.get("messages", [])
+                for m in msgs:
+                    role = m.get("role", "?")
+                    content = m.get("content", "")
+                    if isinstance(content, str) and len(content) > 500:
+                        content = content[:500] + f"... [{len(content)} chars]"
+                    tc = m.get("tool_calls")
+                    tool_id = m.get("tool_call_id")
+                    if tc:
+                        f.write(f"  [{role}] tool_calls: {json.dumps(tc)[:300]}\n")
+                    elif tool_id:
+                        f.write(f"  [tool:{tool_id}] {content[:200]}\n")
+                    else:
+                        f.write(f"  [{role}] {content}\n")
+                if payload.get("tools"):
+                    f.write(f"  [tools] {json.dumps([t['function']['name'] for t in payload['tools']])}\n")
+                f.write("\n")
+        except Exception:
+            pass
+    
+    @staticmethod
+    def _log_response(model: str, response_text: str, tool_calls: list = None, 
+                       usage: dict = None, finish_reason: str = None, error: str = None):
+        """Write incoming response to the debug log."""
+        if not LLMClient._api_log_path:
+            return
+        import datetime
+        ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        try:
+            with open(LLMClient._api_log_path, "a") as f:
+                if error:
+                    f.write(f"[{ts}] RESPONSE model={model} ERROR: {error}\n")
+                else:
+                    f.write(f"[{ts}] RESPONSE model={model} finish={finish_reason or 'stop'}")
+                    if usage:
+                        f.write(f" tokens={usage.get('total_tokens', '?')}")
+                    f.write("\n")
+                    if tool_calls:
+                        for tc in tool_calls:
+                            fn = tc.get("function", {})
+                            f.write(f"  [tool_call] {fn.get('name')}({fn.get('arguments', '')[:200]})\n")
+                    if response_text:
+                        text = response_text if len(response_text) <= 1000 else response_text[:1000] + f"... [{len(response_text)} chars]"
+                        f.write(f"  [content] {text}\n")
+                f.write("\n")
+        except Exception:
+            pass
+    # ── End logging setup ──────────────────────────────────────────
+    
     def __init__(self, api_key: str):
         self.api_key = api_key
     
@@ -66,16 +140,31 @@ class LLMClient:
         req.add_header("HTTP-Referer", "https://github.com/diplomacy-ai")
         req.add_header("X-Title", "Diplomacy AI Orchestrator")
         
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            result = json.loads(resp.read())
+        LLMClient._log_request(model, payload)
+        
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read())
+        except Exception as e:
+            LLMClient._log_response(model, "", error=str(e))
+            raise
         
         if "error" in result:
+            LLMClient._log_response(model, "", error=json.dumps(result['error']))
             raise RuntimeError(f"OpenRouter error: {json.dumps(result['error'])}")
         
-        content = result["choices"][0]["message"].get("content")
+        msg = result["choices"][0]["message"]
+        content = msg.get("content")
         if content is None:
-            # Some models return null content (rate limits, degenerate responses)
-            return ""
+            content = ""
+        
+        LLMClient._log_response(
+            model, content,
+            tool_calls=msg.get("tool_calls"),
+            usage=result.get("usage"),
+            finish_reason=result["choices"][0].get("finish_reason"),
+        )
+        
         return content
 
     def chat(self, model: str, messages: list, system: str = None,
@@ -128,14 +217,30 @@ class LLMClient:
             req.add_header("Content-Type", "application/json")
             req.add_header("HTTP-Referer", "https://github.com/diplomacy-ai")
             req.add_header("X-Title", "Diplomacy AI Orchestrator")
+            
+            LLMClient._log_request(model, payload)
 
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                result = json.loads(resp.read())
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    result = json.loads(resp.read())
+            except Exception as e:
+                LLMClient._log_response(model, "", error=str(e))
+                raise
 
             if "error" in result:
+                LLMClient._log_response(model, "", error=json.dumps(result['error']))
                 raise RuntimeError(f"OpenRouter error: {json.dumps(result['error'])}")
 
             msg = result["choices"][0]["message"]
+
+            # Log the response for this turn of the tool loop
+            content_or_none = msg.get("content")
+            LLMClient._log_response(
+                model, content_or_none or "",
+                tool_calls=msg.get("tool_calls"),
+                usage=result.get("usage"),
+                finish_reason=result["choices"][0].get("finish_reason"),
+            )
 
             # Check for tool calls
             tool_calls = msg.get("tool_calls", [])
@@ -184,6 +289,7 @@ class EngineBridge:
     
     def __init__(self):
         self._counter = 0
+        self._lock = threading.Lock()
         self.proc = subprocess.Popen(
             BRIDGE_CMD,
             stdin=subprocess.PIPE,
@@ -198,22 +304,23 @@ class EngineBridge:
             raise RuntimeError(f"Bridge failed to start: {ready}")
     
     def _call(self, method: str, params: dict = None) -> dict:
-        self._counter += 1
-        req = {"id": self._counter, "method": method}
-        if params:
-            req["params"] = params
-        
-        self.proc.stdin.write(json.dumps(req) + "\n")
-        self.proc.stdin.flush()
-        
-        line = self.proc.stdout.readline()
-        if not line:
-            raise RuntimeError("Bridge process died")
-        
-        resp = json.loads(line)
-        if not resp.get("ok"):
-            raise RuntimeError(f"Bridge error: {resp.get('error', 'unknown')}")
-        return resp
+        with self._lock:
+            self._counter += 1
+            req = {"id": self._counter, "method": method}
+            if params:
+                req["params"] = params
+            
+            self.proc.stdin.write(json.dumps(req) + "\n")
+            self.proc.stdin.flush()
+            
+            line = self.proc.stdout.readline()
+            if not line:
+                raise RuntimeError("Bridge process died")
+            
+            resp = json.loads(line)
+            if not resp.get("ok"):
+                raise RuntimeError(f"Bridge error: {resp.get('error', 'unknown')}")
+            return resp
     
     def reset(self):
         return self._call("reset")
@@ -973,13 +1080,20 @@ Choice:"""
 
 # ─── Board Formatter ─────────────────────────────────────────────────
 
-def format_board(state: dict) -> str:
-    """Format game state as a compact boxed text map. Pure function, no I/O."""
+def format_board(state: dict, season: str = None, year: int = None) -> str:
+    """Format game state as a compact boxed text map. Pure function, no I/O.
+    
+    Optional season/year parameters override the state's fields — use these
+    when the board should reflect a specific phase rather than the current
+    (post-advance) state.
+    """
     players = state.get("players", {})
 
     # Build all lines first to compute width
     lines = []
-    header = f" BOARD — {state.get('season','?')} {state.get('year','?')} "
+    s = season if season is not None else state.get('season','?')
+    y = year if year is not None else state.get('year','?')
+    header = f" BOARD — {s} {y} "
     lines.append(header)
 
     sorted_players = sorted(players.items(), key=lambda x: x[1].get("name", x[0]))
@@ -1059,6 +1173,8 @@ class Orchestrator:
         
         # Initialize the reasoning log
         DiplomacyAgent.init_reasoning_log(SCRIPT_DIR)
+        # Initialize API request/response debug log
+        LLMClient.init_api_log(SCRIPT_DIR)
 
         self.bridge.reset()
         
@@ -1098,8 +1214,7 @@ class Orchestrator:
                     self._run_order_phase()
                     result = self.bridge.resolve()
                     self._show_resolution(result)
-                    self._print_board()
-                    
+                    self._print_board(season=season, year=year)
                     
                     # Generate cross-turn summaries for all agents
                     self._generate_summaries(state, result)
@@ -1115,7 +1230,7 @@ class Orchestrator:
                 elif phase == "BUILD":
                     self._run_build_phase(state)
                     self.bridge.advance_builds()
-                    self._print_board()
+                    self._print_board(season=season, year=year)
                 
                 else:
                     print(f"  Unknown phase: {phase}")
@@ -1123,10 +1238,12 @@ class Orchestrator:
         finally:
             self.bridge.shutdown()
     
-    def _print_board(self):
-        """Print a compact text map of the current board state."""
+    def _print_board(self, season: str = None, year: int = None):
+        """Print a compact text map of the current board state.
+        
+        Optional season/year override display — use captured pre-resolve values."""
         state = self.bridge.get_state()
-        print(format_board(state))
+        print(format_board(state, season=season, year=year))
         print()
 
     def _run_placement_phase(self):
@@ -1237,23 +1354,26 @@ class Orchestrator:
                 orders = agent.generate_orders()
                 # generate_orders() always returns a valid list (HOLD fallback built-in)
                 self.bridge.submit_orders(pid, orders)
+                # Build unit location lookup for readable display
+                unit_locs = {uid: u.get('locationId', '?') for uid, u in units.items()}
                 print(f"  ✓ {agent.country_name}: {len(orders)} orders")
                 for o in orders:
                     uid = o.get('unitId')
                     otype = o.get('type')
+                    loc = unit_locs.get(uid, '?')
                     if otype == 'MOVE':
                         tgt = o.get('targetLocationId', '?')
-                        print(f"      {uid}: MOVE → {tgt}")
+                        print(f"      {uid} (at {loc}): MOVE → {tgt}")
                     elif otype == 'SUPPORT':
                         sup_u = o.get('supportUnitId', '?')
                         sup_ot = o.get('supportOrderType', '?')
                         sup_tgt = o.get('supportTargetLocationId', '')
                         if sup_ot == 'MOVE' and sup_tgt:
-                            print(f"      {uid}: SUPPORT {sup_u} MOVE → {sup_tgt}")
+                            print(f"      {uid} (at {loc}): SUPPORT {sup_u} MOVE → {sup_tgt}")
                         else:
-                            print(f"      {uid}: SUPPORT {sup_u} {sup_ot}")
+                            print(f"      {uid} (at {loc}): SUPPORT {sup_u} {sup_ot}")
                     else:
-                        print(f"      {uid}: {otype}")
+                        print(f"      {uid} (at {loc}): {otype}")
             except Exception as e:
                 print(f"  ❌ {agent.country_name}: {e}", flush=True)
     
@@ -1354,19 +1474,25 @@ class Orchestrator:
         dislodged = r.get("dislodgedUnits", [])
         destroyed = r.get("destroyedUnits", [])
         
+        # Build unit location lookup from current state (post-resolve)
+        state = self.bridge.get_state()
+        state_units = state.get("units", {})
+        
         print(f"\n  ⚔ RESOLUTION:")
         marker = False
         for m in moves:
             print(f"    ✓ {m['unitId']}: {m['fromLocationId']} → {m['toLocationId']}")
             marker = True
         for b in bounced:
-            print(f"    ✗ {b['unitId']}: bounced from {b['attemptedLocationId']}")
+            loc = state_units.get(b['unitId'], {}).get('locationId', '?')
+            print(f"    ✗ {b['unitId']} (at {loc}): bounced from {b['attemptedLocationId']}")
             marker = True
         for d in dislodged:
             print(f"    💥 {d['unitId']}: DISLODGED from {d['fromLocationId']}")
             marker = True
         for d in destroyed:
-            print(f"    💀 {d}: DESTROYED")
+            loc = state_units.get(d, {}).get('locationId', '?')
+            print(f"    💀 {d} (at {loc}): DESTROYED")
             marker = True
         if not marker:
             print("    (no changes)")

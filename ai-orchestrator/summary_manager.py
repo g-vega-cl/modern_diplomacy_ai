@@ -15,7 +15,7 @@ class SummaryManager:
     Wiped at game start, updated after each turn's resolution.
     """
 
-    DEFAULT_MAX_TURN_HISTORY = 8
+    DEFAULT_MAX_TURN_HISTORY = 4
 
     REQUIRED_FIELDS = {
         "country": str,
@@ -127,7 +127,7 @@ RULES:
 - DEALS: Record specific agreements (e.g., support coordination). Mark fulfilled if the other party did their part, betrayed if they didn't, pending if outcome is unknown.
 - BETRAYALS: Record when another power breaks a deal or attacks unexpectedly.
 - LONG_TERM_PLAN: Your current strategic vision. Be honest — this is private memory only you see.
-- TURN_HISTORY: Append one new entry for this turn. Keep ALL prior entries from the previous summary — do not drop old history.
+- TURN_HISTORY: Append one new entry for this turn. Keep only the last 4 entries from the previous summary — drop older history to stay within limits.
 
 Respond with ONLY the JSON object — no markdown, no explanation."""
 

@@ -14,7 +14,7 @@ from unittest import mock
 
 # Add the orchestrator directory to path so we can import from orchestrator
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from orchestrator import load_config, DiplomacyAgent, LLMClient, format_board
+from orchestrator import load_config, DiplomacyAgent, LLMClient, EngineBridge, format_board
 
 
 class TestConfigLoading(unittest.TestCase):
@@ -831,6 +831,42 @@ class TestBoardFormatter(unittest.TestCase):
         # Should still have box borders
         self.assertIn("╔", output)
 
+    def test_season_override_ignores_state_season(self):
+        """When season is passed explicitly, it should override state.season."""
+        state = self.make_state(1901, "FALL", players={
+            "england": self.make_player("England", 3, {"F_LON_0": self.make_unit("F", "LON")}),
+        })
+        output = format_board(state, season="SPRING")
+        self.assertIn("SPRING 1901", output)
+        self.assertNotIn("FALL 1901", output)
+
+    def test_year_override_ignores_state_year(self):
+        """When year is passed explicitly, it should override state.year."""
+        state = self.make_state(1901, "SPRING", players={
+            "england": self.make_player("England", 3, {"F_LON_0": self.make_unit("F", "LON")}),
+        })
+        output = format_board(state, year=1905)
+        self.assertIn("SPRING 1905", output)
+        self.assertNotIn("1901", output)
+
+    def test_override_both_season_and_year(self):
+        """Both season and year override simultaneously."""
+        state = self.make_state(1901, "SPRING", players={
+            "england": self.make_player("England", 3, {"F_LON_0": self.make_unit("F", "LON")}),
+        })
+        output = format_board(state, season="FALL", year=1904)
+        self.assertIn("FALL 1904", output)
+        self.assertNotIn("SPRING", output)
+        self.assertNotIn("1901", output)
+
+    def test_no_override_uses_state_values(self):
+        """Without explicit overrides, state values should be used."""
+        state = self.make_state(1903, "FALL", players={
+            "turkey": self.make_player("Turkey", 4, {"F_ANK_0": self.make_unit("F", "ANK")}),
+        })
+        output = format_board(state)
+        self.assertIn("FALL 1903", output)
+
 
 class TestToolBasedOrderGeneration(unittest.TestCase):
     """Test that generate_orders uses the tool-based flow."""
@@ -955,5 +991,330 @@ class TestToolBasedOrderGeneration(unittest.TestCase):
         self.assertIn("F_BRE_2_france", unit_ids)
 
 
+
+class TestEngineBridgeThreadSafety(unittest.TestCase):
+    """Verify that EngineBridge._call() is thread-safe.
+
+    The bridge communicates with a subprocess via stdin/stdout.
+    Without a lock, concurrent _call() invocations interleave
+    writes and reads, corrupting the JSON-line protocol."""
+
+    def setUp(self):
+        import json as _json
+        self.mock_proc = mock.MagicMock()
+        self.mock_proc.stdin = mock.MagicMock()
+        self.mock_proc.stdout = mock.MagicMock()
+        self.mock_proc.stderr = mock.MagicMock()
+        self.mock_proc.stderr.readline = mock.MagicMock(
+            return_value="ENGINE_BRIDGE_READY\n"
+        )
+
+    def test_concurrent_calls_do_not_interleave_stdin_stdout(self):
+        """Each _call must complete write→read atomically before the next begins.
+
+        Interleaving is detected when readline() is called without a
+        corresponding write() — the counter goes out of sync.
+        Without a lock, the 80ms sleep in readline creates a window
+        wide enough for thread B to write() while thread A is still
+        blocked in readline(), causing the mismatch."""
+        import json as _json
+        import threading
+        import time
+
+        # ── Shared state ────────────────────────────────────
+        state_lock = threading.Lock()
+        write_count = [0]    # increments on each write()
+        read_count = [0]     # increments on each readline()
+        interleaved = [0]    # times read_count != write_count
+
+        def mock_write(text):
+            with state_lock:
+                write_count[0] += 1
+
+        def mock_readline():
+            time.sleep(0.08)   # simulate subprocess latency
+            with state_lock:
+                read_count[0] += 1
+                if read_count[0] != write_count[0]:
+                    interleaved[0] += 1
+            return _json.dumps({"ok": True, "state": {}}) + "\n"
+
+        self.mock_proc.stdin.write = mock_write
+        self.mock_proc.stdin.flush = mock.MagicMock()
+        self.mock_proc.stdout.readline = mock_readline
+
+        with mock.patch("subprocess.Popen", return_value=self.mock_proc):
+            bridge = EngineBridge()
+
+        # ── Fire 10 concurrent threads at the bridge ───────
+        errors = []
+
+        def worker():
+            try:
+                bridge._call("getState")
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        self.assertEqual(len(errors), 0,
+            f"Unexpected errors during concurrent _call(): {errors}")
+        self.assertEqual(interleaved[0], 0,
+            f"Detected {interleaved[0]} interleaved reads — "
+            f"bridge _call() is NOT thread-safe")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestAPILogging(unittest.TestCase):
+    """Test that LLMClient request/response logging works correctly."""
+
+    def setUp(self):
+        # Reset logging state before each test
+        LLMClient._api_log_path = None
+
+    def test_init_api_log_creates_file(self):
+        """init_api_log should create a file at the specified path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            self.assertIsNotNone(LLMClient._api_log_path)
+            self.assertTrue(os.path.exists(LLMClient._api_log_path))
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+                self.assertIn("API DEBUG LOG", content)
+
+    def test_log_request_writes_to_file(self):
+        """_log_request should write request details to the log."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            payload = {
+                "model": "openai/gpt-5.4-nano",
+                "messages": [
+                    {"role": "user", "content": "What are your orders?"},
+                    {"role": "system", "content": "You are France."},
+                ],
+                "temperature": 0.9,
+                "max_tokens": 300,
+            }
+            LLMClient._log_request("openai/gpt-5.4-nano", payload)
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+            self.assertIn("REQUEST", content)
+            self.assertIn("openai/gpt-5.4-nano", content)
+            self.assertIn("What are your orders?", content)
+
+    def test_log_response_writes_to_file(self):
+        """_log_response should write response details to the log."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            LLMClient._log_response(
+                "deepseek/deepseek-v4-flash",
+                "I will move to BUR",
+                finish_reason="stop",
+                usage={"total_tokens": 1500},
+            )
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+            self.assertIn("RESPONSE", content)
+            self.assertIn("deepseek/deepseek-v4-flash", content)
+            self.assertIn("move to BUR", content)
+            self.assertIn("tokens=1500", content)
+
+    def test_log_response_with_tool_calls(self):
+        """Response with tool_calls should log them."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            tool_calls = [{
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "get_my_units", "arguments": "{}"},
+            }]
+            LLMClient._log_response(
+                "openai/gpt-5.4-nano",
+                "",
+                tool_calls=tool_calls,
+                finish_reason="tool_calls",
+            )
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+            self.assertIn("[tool_call]", content)
+            self.assertIn("get_my_units", content)
+
+    def test_log_response_with_error(self):
+        """Error responses should be logged clearly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            LLMClient._log_response(
+                "xiaomi/mimo-v2-flash",
+                "",
+                error="HTTP 503 Service Unavailable",
+            )
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+            self.assertIn("ERROR", content)
+            self.assertIn("HTTP 503", content)
+
+    def test_log_response_truncates_long_content(self):
+        """Content > 1000 chars should be truncated with a length indicator."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            long_text = "A" * 2000
+            LLMClient._log_response("test/model", long_text)
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+            self.assertIn("[2000 chars]", content)
+            self.assertNotIn("A" * 2000, content)
+
+    def test_log_request_truncates_long_messages(self):
+        """Messages > 500 chars should be truncated."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            LLMClient.init_api_log(tmpdir)
+            long_msg = "X" * 800
+            payload = {
+                "model": "test/model",
+                "messages": [{"role": "user", "content": long_msg}],
+                "temperature": 0.5,
+                "max_tokens": 100,
+            }
+            LLMClient._log_request("test/model", payload)
+            with open(LLMClient._api_log_path) as f:
+                content = f.read()
+            self.assertIn("[800 chars]", content)
+            self.assertNotIn("X" * 800, content)
+
+    def test_no_log_when_not_initialized(self):
+        """When _api_log_path is None, logging should be no-ops."""
+        LLMClient._api_log_path = None
+        # Should not raise
+        LLMClient._log_request("test/model", {"messages": []})
+        LLMClient._log_response("test/model", "test")
+
+
+class TestSummaryTurnHistoryCap(unittest.TestCase):
+    """Test that turn_history is capped at 4 entries."""
+
+    def setUp(self):
+        # Import here to avoid modifying sys.path in the module scope
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+        from summary_manager import SummaryManager
+        self.SummaryManager = SummaryManager
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.mgr = SummaryManager(self.tmpdir.name)
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_default_max_is_4(self):
+        """DEFAULT_MAX_TURN_HISTORY should be 4."""
+        self.assertEqual(self.SummaryManager.DEFAULT_MAX_TURN_HISTORY, 4)
+
+    def test_cap_at_exactly_4(self):
+        """When turn_history has 4 entries, all are kept."""
+        summary = {
+            "country": "england",
+            "last_updated": "FALL 1901",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Win.",
+            "turn_history": [
+                {"turn": "SPRING 1901", "summary": "Moved."},
+                {"turn": "FALL 1901", "summary": "Took Norway."},
+                {"turn": "SPRING 1902", "summary": "Consolidated."},
+                {"turn": "FALL 1902", "summary": "Built."},
+            ],
+        }
+        capped = self.mgr._cap_turn_history(summary)
+        self.assertEqual(len(capped["turn_history"]), 4)
+        self.assertEqual(capped["turn_history"][-1]["turn"], "FALL 1902")
+
+    def test_cap_truncates_older_entries(self):
+        """When turn_history has 6 entries, only the 4 most recent are kept."""
+        summary = {
+            "country": "france",
+            "last_updated": "FALL 1903",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Survive.",
+            "turn_history": [
+                {"turn": "SPRING 1901", "summary": "Moved to BUR."},
+                {"turn": "FALL 1901", "summary": "Took BEL."},
+                {"turn": "SPRING 1902", "summary": "Consolidated."},
+                {"turn": "FALL 1902", "summary": "Built fleet."},
+                {"turn": "SPRING 1903", "summary": "Pushed east."},
+                {"turn": "FALL 1903", "summary": "Held line."},
+            ],
+        }
+        capped = self.mgr._cap_turn_history(summary)
+        self.assertEqual(len(capped["turn_history"]), 4)
+        # Oldest entries should be dropped
+        turns = [e["turn"] for e in capped["turn_history"]]
+        self.assertNotIn("SPRING 1901", turns)
+        self.assertNotIn("FALL 1901", turns)
+        self.assertIn("FALL 1902", turns)
+        self.assertIn("SPRING 1903", turns)
+        self.assertIn("FALL 1903", turns)
+
+    def test_original_summary_not_mutated(self):
+        """The original summary dict should not be modified."""
+        summary = {
+            "country": "italy",
+            "last_updated": "FALL 1902",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Expand.",
+            "turn_history": [
+                {"turn": "SPRING 1901", "summary": "Placed."},
+                {"turn": "FALL 1901", "summary": "Held."},
+                {"turn": "SPRING 1902", "summary": "Held."},
+                {"turn": "FALL 1902", "summary": "Moved."},
+                {"turn": "SPRING 1903", "summary": "Attacked."},
+            ],
+        }
+        capped = self.mgr._cap_turn_history(summary)
+        self.assertEqual(len(summary["turn_history"]), 5)  # Original unchanged
+        self.assertEqual(len(capped["turn_history"]), 4)    # Capped copy
+
+    def test_under_limit_preserves_all(self):
+        """When turn_history has fewer than 4 entries, all are kept."""
+        summary = {
+            "country": "germany",
+            "last_updated": "FALL 1901",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Grow.",
+            "turn_history": [
+                {"turn": "SPRING 1901", "summary": "Took DEN."},
+                {"turn": "FALL 1901", "summary": "Took HOL."},
+            ],
+        }
+        capped = self.mgr._cap_turn_history(summary)
+        self.assertEqual(len(capped["turn_history"]), 2)
+        turns = [e["turn"] for e in capped["turn_history"]]
+        self.assertEqual(turns, ["SPRING 1901", "FALL 1901"])
+
+    def test_empty_history(self):
+        """Empty turn_history should remain empty."""
+        summary = {
+            "country": "austria",
+            "last_updated": "SPRING 1901",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Survive.",
+            "turn_history": [],
+        }
+        capped = self.mgr._cap_turn_history(summary)
+        self.assertEqual(capped["turn_history"], [])
+

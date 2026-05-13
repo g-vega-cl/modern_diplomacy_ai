@@ -19,3 +19,5 @@ yarn.lock
 /playwright/.cache/
 .tanstack
 ai-orchestrator/summaries/
+ai-orchestrator/agent_reasoning_*.log
+ai-orchestrator/api_debug_*.log
