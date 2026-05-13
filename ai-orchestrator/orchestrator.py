@@ -7,6 +7,10 @@ Uses OpenRouter for LLM access. Zero external dependencies (stdlib only).
 Architecture:
   Python orchestrator ←→ Node.js engine-bridge.js (JSON-line subprocess)
   Each country = one DiplomacyAgent with its own LLM model from OpenRouter
+  Cross-turn memory via SummaryManager — each agent maintains a structured
+  JSON summary (alliances, deals, betrayals, plans) across turns instead of
+  re-reading full negotiation histories. Summaries generated in parallel
+  after each resolution. See summaries/{country}.json
 """
 
 import json

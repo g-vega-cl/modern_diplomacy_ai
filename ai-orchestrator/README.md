@@ -20,7 +20,7 @@ python3 ai-orchestrator/orchestrator.py
 ```bash
 # All tests (TypeScript engine + bridge + Python orchestrator)
 pnpm test                          # 131 tests: 114 engine + 17 bridge
-python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 87 orchestrator tests
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 105 orchestrator tests
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
@@ -36,6 +36,7 @@ orchestrator.py (Python, stdlib only)
 │           └── Tool-calling loop: agents explore state via validated tools
 │               before submitting orders (ORDER phase)
 ├── AgentTools → validates orders AND builds at call time, buffers submissions
+├── SummaryManager → cross-turn strategic memory (JSON summaries per country)
 ├── LLMClient → chat_with_tools() multi-turn tool loop + plain chat()
 └── EngineBridge (subprocess)
       └── npx tsx engine-bridge.ts → DiplomacyEngine (TypeScript)
@@ -133,19 +134,25 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │       auto-advances to RETREAT/BUILD/next ORDER     │
 │     → Same-power duplicate destination moves are    │
 │       detected and both units bounce               │
+│  7. Cross-turn summary generation (parallel)        │
+│     → Each agent generates a structured JSON        │
+│       summary: alliances, deals, betrayals, plans   │
+│     → Saved to summaries/{country}.json             │
+│     → Injected as context next turn (negotiation    │
+│       AND order generation)                         │
 ├─────────────────────────────────────────────────────┤
 │ RETREAT (if any units dislodged)                    │
-│  7. Each dislodged unit retreats or disbands        │
+│  8. Each dislodged unit retreats or disbands        │
 ├─────────────────────────────────────────────────────┤
 │ FALL ORDER (same as spring)                         │
 ├─────────────────────────────────────────────────────┤
 │ WINTER BUILDS                                       │
-│  8. Supply center ownership recalculated: any unit   │
+│  9. Supply center ownership recalculated: any unit   │
 │     sitting on a SC claims it; empty SCs keep        │
 │     previous owner (tracked per-center, not just     │
 │     incrementing). Delta (SCs - units): build or     │
 │     disband.                                       │
-│  9. Each agent enters tool loop:                     │
+│ 10. Each agent enters tool loop:                    │
 │     → calls get_my_units, get_valid_builds           │
 │     → submits builds via submit_build tool           │
 │     → validates at call time (location, type, count)│
@@ -156,6 +163,76 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │ NEXT YEAR (repeat until 18 SCs or max years)        │
 └─────────────────────────────────────────────────────┘
 ```
+
+## Cross-Turn Summary Log
+
+Each agent maintains a persistent strategic memory across turns via structured JSON summaries. Instead of re-reading the full negotiation history every turn (which would bloat context), agents consume their summary + the current turn's chat.
+
+### How It Works
+
+```
+After each ORDER resolution:
+  ┌─────────────────────────────────────┐
+  │ 1. All 7 agents run in parallel     │
+  │    (2-minute timeout)               │
+  │ 2. Each agent calls its LLM with:   │
+  │    • Board state                    │
+  │    • This turn's full chat log      │
+  │    • Resolution results             │
+  │    • Previous summary (if any)      │
+  │ 3. LLM produces updated JSON        │
+  │ 4. Saved to summaries/{country}.json│
+  └─────────────────────────────────────┘
+
+Next negotiation:
+  ┌─────────────────────────────────────┐
+  │ • Summary loaded and injected as    │
+  │   "YOUR STRATEGIC MEMORY"           │
+  │ • Agents see: summary + live chat   │
+  │ • Summary also injected into order  │
+  │   generation prompt                 │
+  └─────────────────────────────────────┘
+```
+
+### Summary JSON Format
+
+```json
+{
+  "country": "england",
+  "last_updated": "Fall 1901 (after resolution)",
+  "alliances": [
+    {"country": "germany", "status": "active",
+     "since_turn": "Spring 1901", "notes": "Mutual defense pact"}
+  ],
+  "deals": [
+    {"country": "germany", "deal": "Germany supports my fleet into Denmark",
+     "my_part": "I leave Holland to Germany",
+     "turn_made": "Spring 1901", "status": "fulfilled"}
+  ],
+  "betrayals": [
+    {"country": "france", "incident": "Promised support into Belgium but held instead",
+     "turn": "Fall 1901"}
+  ],
+  "long_term_plan": "Eliminate France with German help, then push east.",
+  "turn_history": [
+    {"turn": "Spring 1901", "summary": "Opened F NTH, A YOR. Allied with Germany."},
+    {"turn": "Fall 1901", "summary": "Took Norway. France betrayed me in Belgium."}
+  ]
+}
+```
+
+**Fields:**
+| Field | Purpose |
+|-------|---------|
+| `alliances` | Active pacts: status = `active`, `broken`, or `tentative` |
+| `deals` | Specific agreements: status = `pending`, `fulfilled`, or `betrayed` |
+| `betrayals` | When another power breaks a deal or attacks unexpectedly |
+| `long_term_plan` | 2-3 sentence strategic vision (private — only this agent sees it) |
+| `turn_history` | Chronological log, capped at last 8 turns (2 years) |
+
+**Storage:** Summaries live in `ai-orchestrator/summaries/{country}.json`, wiped at game start. The directory is gitignored.
+
+**Schema validation:** Corrupted or malformed summaries are rejected at save time — each summary must have all 7 required fields with correct types before writing to disk.
 
 ## Board Display
 
@@ -247,7 +324,8 @@ This ensures agents know they can HOLD or SUPPORT even when no move destinations
 
 | File | Purpose |
 |------|---------|
-| `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry + tool-calling loop), EngineBridge |
+| `orchestrator.py` | Main game loop, DiplomacyAgent, LLMClient (with fallback retry + tool-calling loop), EngineBridge, SummaryManager integration |
+| `summary_manager.py` | Cross-turn summary persistence: JSON I/O, schema validation, LLM-driven summary generation |
 | `agent_tools.py` | Tool definitions + dispatcher: validates and buffers orders (ORDER phase) and builds (BUILD phase) |
 | `engine-bridge.ts` | Node.js subprocess wrapping the TypeScript Diplomacy engine |
 | `agents.json` | Country → OpenRouter model + persona + fallback_model + game settings |
@@ -255,6 +333,8 @@ This ensures agents know they can HOLD or SUPPORT even when no move destinations
 | `__tests__/test_orchestrator.py` | 55 tests: config, parsing, prompts, fallback model, chat sanitization, board display, state text, tool-based order generation |
 | `__tests__/test_agent_tools.py` | 32 tests for all tool methods (20 order + 12 build) + input validation |
 | `__tests__/test_tool_client.py` | 2 tests for the chat_with_tools tool-calling loop |
+| `__tests__/test_summary.py` | 16 tests: file I/O, validation, LLM generation, integration |
+| `summaries/` | Per-country JSON summaries (gitignored, wiped at game start) |
 
 ## Troubleshooting
 

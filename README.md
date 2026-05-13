@@ -198,7 +198,7 @@ pnpm play          # Terminal CLI (human vs human)
 pnpm build         # TypeScript check
 
 # Python orchestrator tests
-python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 75 Python tests
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 105 Python tests
 
 # Full AI game
 python3 ai-orchestrator/orchestrator.py  # 7 AI agents (needs OPENROUTER_API_KEY)
@@ -304,16 +304,18 @@ src/
   utils/               — Shared utilities
 
 ai-orchestrator/
-  orchestrator.py      — Main game loop, 7 AI agents, OpenRouter client
-  agent_tools.py       — Tool definitions + validated dispatch for ORDER phase
+  orchestrator.py      — Main game loop, 7 AI agents, OpenRouter client, SummaryManager
+  summary_manager.py   — Cross-turn summary persistence (JSON I/O, validation, LLM generation)
+  agent_tools.py       — Tool definitions + validated dispatch for ORDER and BUILD phases
   engine-bridge.ts     — Node.js subprocess wrapping the TypeScript engine
   agents.json          — Country → OpenRouter model + persona configuration
-  __tests__/           — 16 bridge tests + 75 Python tests
+  summaries/           — Per-country JSON summaries (gitignored, wiped at game start)
+  __tests__/           — 17 bridge tests + 105 Python tests
 ```
 
 ```bash
 pnpm test              # 128 tests (80 engine + 32 negotiation + 16 bridge)
-python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 75 Python tests
+python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 105 Python tests
 ```
 
 ---
