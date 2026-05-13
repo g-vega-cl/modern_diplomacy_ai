@@ -84,5 +84,76 @@ class TestSummaryFileIO(unittest.TestCase):
         self.assertEqual(capped["turn_history"][-1]["turn"], "Turn 14")
 
 
+class TestSummaryValidation(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.mgr = SummaryManager(self.tmpdir)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_validate_accepts_complete_summary(self):
+        """A fully populated summary should pass validation."""
+        summary = {
+            "country": "england",
+            "last_updated": "Fall 1901",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Conquer Scandinavia",
+            "turn_history": []
+        }
+        result = self.mgr.validate(summary)
+        self.assertTrue(result)
+
+    def test_validate_rejects_missing_required_field(self):
+        """Missing 'alliances' should fail validation."""
+        summary = {
+            "country": "england",
+            "last_updated": "",
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "",
+            "turn_history": []
+        }
+        result = self.mgr.validate(summary)
+        self.assertFalse(result)
+
+    def test_validate_rejects_wrong_type(self):
+        """alliances should be a list, not a string."""
+        summary = {
+            "country": "england",
+            "last_updated": "",
+            "alliances": "germany",  # wrong type
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "",
+            "turn_history": []
+        }
+        result = self.mgr.validate(summary)
+        self.assertFalse(result)
+
+    def test_empty_summary_is_valid(self):
+        """A minimal summary with empty fields should pass validation."""
+        summary = {
+            "country": "france",
+            "last_updated": "Spring 1901",
+            "alliances": [],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "",
+            "turn_history": []
+        }
+        result = self.mgr.validate(summary)
+        self.assertTrue(result)
+
+    def test_save_rejects_invalid_summary(self):
+        """Saving an invalid summary should raise ValueError."""
+        summary = {"country": "england"}  # missing all other fields
+        with self.assertRaises(ValueError):
+            self.mgr.save("england", summary)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

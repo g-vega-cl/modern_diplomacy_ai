@@ -16,6 +16,16 @@ class SummaryManager:
 
     DEFAULT_MAX_TURN_HISTORY = 8
 
+    REQUIRED_FIELDS = {
+        "country": str,
+        "last_updated": str,
+        "alliances": list,
+        "deals": list,
+        "betrayals": list,
+        "long_term_plan": str,
+        "turn_history": list,
+    }
+
     def __init__(self, summaries_dir: str):
         self.dir = Path(summaries_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +42,9 @@ class SummaryManager:
             return json.load(f)
 
     def save(self, country: str, summary: dict):
-        """Save a country's summary to disk. Caps turn_history."""
+        """Save a country's summary to disk. Caps turn_history and validates."""
+        if not self.validate(summary):
+            raise ValueError(f"Summary for {country} failed validation: {list(self.REQUIRED_FIELDS.keys())}")
         summary = self._cap_turn_history(summary)
         with open(self._path(country), "w") as f:
             json.dump(summary, f, indent=2)
@@ -47,6 +59,17 @@ class SummaryManager:
         """Remove ALL summary files (called at game start)."""
         for path in self.dir.glob("*.json"):
             path.unlink()
+
+    def validate(self, summary: dict) -> bool:
+        """Check that a summary dict has all required fields with correct types."""
+        if not isinstance(summary, dict):
+            return False
+        for field, expected_type in self.REQUIRED_FIELDS.items():
+            if field not in summary:
+                return False
+            if not isinstance(summary[field], expected_type):
+                return False
+        return True
 
     def _cap_turn_history(self, summary: dict, max_turns: int = None) -> dict:
         """Truncate turn_history to at most max_turns, keeping most recent."""
