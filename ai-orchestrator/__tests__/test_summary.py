@@ -338,5 +338,80 @@ class TestSummaryGeneration(unittest.TestCase):
         self.assertEqual(result["country"], "england")
 
 
+class TestSummaryIntegration(unittest.TestCase):
+    """Integration test: summary flows through a simulated turn cycle."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.mgr = SummaryManager(self.tmpdir)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_summary_persists_across_turns(self):
+        """Summary saved in Turn 1 should be loadable in Turn 2 with appended history."""
+        t1_summary = {
+            "country": "england",
+            "last_updated": "Spring 1901 (after resolution)",
+            "alliances": [
+                {"country": "germany", "status": "active",
+                 "since_turn": "Spring 1901", "notes": "Defense pact"}
+            ],
+            "deals": [],
+            "betrayals": [],
+            "long_term_plan": "Expand north",
+            "turn_history": [
+                {"turn": "Spring 1901", "summary": "Opened. Allied with Germany."}
+            ]
+        }
+        self.mgr.save("england", t1_summary)
+
+        # Simulate Turn 2 — load and append
+        loaded = self.mgr.load("england")
+        self.assertIsNotNone(loaded)
+        self.assertEqual(len(loaded["turn_history"]), 1)
+
+        loaded["turn_history"].append(
+            {"turn": "Fall 1901", "summary": "Took Norway. France hostile."}
+        )
+        loaded["last_updated"] = "Fall 1901 (after resolution)"
+        loaded["alliances"].append(
+            {"country": "russia", "status": "tentative",
+             "since_turn": "Fall 1901", "notes": "Non-aggression pact"}
+        )
+        self.mgr.save("england", loaded)
+
+        # Verify Turn 2 data
+        final = self.mgr.load("england")
+        self.assertEqual(len(final["turn_history"]), 2)
+        self.assertEqual(len(final["alliances"]), 2)
+        self.assertEqual(final["turn_history"][1]["turn"], "Fall 1901")
+
+    def test_format_resolution_for_summary(self):
+        """_format_resolution_for_summary should produce readable text."""
+        from orchestrator import Orchestrator
+        resolution = {
+            "successfulMoves": [
+                {"unitId": "F_NTH", "fromLocationId": "NTH", "toLocationId": "NWY"}
+            ],
+            "bouncedMoves": [
+                {"unitId": "A_YOR", "attemptedLocationId": "BEL"}
+            ],
+            "dislodgedUnits": [],
+            "destroyedUnits": ["F_LON"]
+        }
+        # Create a minimal Orchestrator instance to access the method
+        # Use a null bridge pattern — we just need the method
+        orch = Orchestrator.__new__(Orchestrator)
+        text = orch._format_resolution_for_summary(resolution)
+        self.assertIn("F_NTH", text)
+        self.assertIn("NWY", text)
+        self.assertIn("A_YOR", text)
+        self.assertIn("BEL", text)
+        self.assertIn("F_LON", text)
+        self.assertIn("DESTROYED", text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
