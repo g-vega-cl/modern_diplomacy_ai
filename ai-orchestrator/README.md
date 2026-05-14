@@ -128,12 +128,23 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │     → validates at call time (no parsing needed)    │
 │     → calls finalize_orders when done               │
 │     → HOLD fallback if tool loop produces nothing   │
+│  4a. Self-conflict audit (pre-submit):               │
+│     → Checks if agent ordered 2+ of its own units   │
+│       to the same destination (illegal in Diplomacy)│
+│     → If conflict: retry with explicit conflict info │
+│       via fresh tool loop (max 10 turns)            │
+│     → If still conflicted: auto-fix second unit to   │
+│       HOLD so both don't bounce uselessly           │
+│  4b. Verbal reasoning:                               │
+│     → Each agent explains its strategic intent for   │
+│       this turn in 1-2 sentences (🎯 output)        │
 │  5. All orders submitted simultaneously to engine    │
 │  6. Engine resolves (supports, combat, standoffs)   │
 │     → RESOLUTION is an internal phase; the bridge   │
 │       auto-advances to RETREAT/BUILD/next ORDER     │
 │     → Same-power duplicate destination moves are    │
-│       detected and both units bounce               │
+│       detected by the engine as a safety net        │
+│       (normally caught by pre-submit audit above)   │
 │  7. Cross-turn summary generation (parallel)        │
 │     → Each agent generates a structured JSON        │
 │       summary: alliances, deals, betrayals, plans   │
@@ -352,12 +363,13 @@ The orchestrator has multiple fallback and retry layers:
 
 1. **Tool-based validation (ORDER phase)**: Agents submit orders via validated tool calls. Invalid moves or enemy units are rejected at call time with clear error messages — the agent self-corrects in the same turn. No JSON parsing needed for orders.
 2. **Tool-based validation (BUILD phase)**: Agents submit builds via validated tool calls. Invalid locations, duplicate builds, wrong counts, and bad unit types are rejected at call time. Engine also enforces occupancy validation — no two units in the same tile.
-3. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically.
-4. **HOLD fallback (ORDER phase)**: If the tool loop produces no orders (exhausted max_turns, unresponsive model), all units default to HOLD.
-5. **Parse retry (placement phase only)**: If the LLM response isn't valid JSON, the prompt is retried once with a formatting warning. Placement is the only remaining JSON-based phase.
-6. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
-7. **Build fallback**: If the tool loop produces no builds, an auto-fallback picks the first N valid home centers (for CREATE) or disbands the first N units (for DESTROY).
-8. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
+3. **Self-conflict audit (ORDER phase)**: Before submitting orders to the engine, the orchestrator checks if any agent ordered 2+ of its own units to the same destination. If found, the agent gets a retry with explicit conflict info. If the retry still has conflicts, the second unit is auto-fixed to HOLD.
+4. **LLM fallback**: If the primary model returns empty content, the `fallback_model` (default: `openai/gpt-5.4-nano`) is tried automatically.
+5. **HOLD fallback (ORDER phase)**: If the tool loop produces no orders (exhausted max_turns, unresponsive model), all units default to HOLD.
+6. **Parse retry (placement phase only)**: If the LLM response isn't valid JSON, the prompt is retried once with a formatting warning. Placement is the only remaining JSON-based phase.
+7. **Placement fallback**: If all retries fail for placements, valid placements are auto-selected (first valid type per home center).
+8. **Build fallback**: If the tool loop produces no builds, an auto-fallback picks the first N valid home centers (for CREATE) or disbands the first N units (for DESTROY).
+9. **Chat sanitization**: Messages that contain meta-reasoning, raw JSON, or markup are automatically cleaned before posting.
 
 Check the stderr output for the raw LLM response if debugging is needed.
 

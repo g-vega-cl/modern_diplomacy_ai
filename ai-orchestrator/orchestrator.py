@@ -510,6 +510,55 @@ Strategic notes:
 
         return orders
     
+    def generate_order_reasoning(self, orders: list) -> str:
+        """Ask the LLM to explain its order choices in 1-2 sentences."""
+        if not orders:
+            return ""
+
+        # Build a readable summary of orders
+        state = self.bridge.get_state()
+        units = state.get("units", {})
+        order_lines = []
+        for o in orders:
+            uid = o.get("unitId", "?")
+            otype = o.get("type", "?")
+            unit = units.get(uid, {})
+            loc = unit.get("locationId", "?")
+            if otype == "MOVE":
+                tgt = o.get("targetLocationId", "?")
+                order_lines.append(f"  {uid} at {loc}: MOVE → {tgt}")
+            elif otype == "SUPPORT":
+                sup_u = o.get("supportUnitId", "?")
+                sup_ot = o.get("supportOrderType", "?")
+                sup_tgt = o.get("supportTargetLocationId", "")
+                if sup_ot == "MOVE" and sup_tgt:
+                    order_lines.append(f"  {uid} at {loc}: SUPPORT {sup_u} MOVE → {sup_tgt}")
+                else:
+                    order_lines.append(f"  {uid} at {loc}: SUPPORT {sup_u} {sup_ot}")
+            else:
+                order_lines.append(f"  {uid} at {loc}: {otype}")
+
+        prompt = f"""You are {self.country_name}. You just submitted these orders:
+
+{chr(10).join(order_lines)}
+
+In EXACTLY 1-2 sentences, briefly explain your strategic intent for this turn.
+What are you trying to accomplish? Be direct and in-character.
+
+Your response must be ONLY the explanation text. No JSON, no reasoning tags."""
+
+        response = self.llm.chat(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            system=self.system_prompt,
+            temperature=0.5,
+            max_tokens=100,
+            fallback_model=self.fallback_model,
+        )
+        if response:
+            return response.strip()
+        return ""
+
     def generate_placements(self) -> list:
         """Ask the LLM to choose where to place its initial units.
         Retries once with stronger formatting instructions on parse failure."""
@@ -744,7 +793,9 @@ Or reply with just "PASS" (single word) to stay silent."""
             self.bridge.chat_send(channel_id, self.player_id, self.country_name, message_text)
             self.msg_count += 1
             short = message_text[:80].replace("\n", " ")
-            print(f"  💬 {self.country_name}: \"{short}...\"", flush=True)
+            ch = recent[-1][0] if recent else {"name": "?", "id": "?"}
+            ch_name = ch.get("name", ch.get("id", "?"))
+            print(f"  💬 {self.country_name} [{ch_name}]: \"{short}...\"", flush=True)
         except Exception as e:
             print(f"  ⚠ {self.country_name} send err: {e}", flush=True)
     
@@ -756,7 +807,7 @@ Or reply with just "PASS" (single word) to stay silent."""
         if hash(self.player_id + str(int(time.time() / 8))) % 10 < 2.5:
             # Show available channels
             channel_list = "\n".join(
-                f"  • \"{ch.get('name', ch['id'])}\" — this channel's ID is \"{ch['id']}\""
+                f"  • \"{ch.get('name', ch['id'])}\""
                 for ch in channels
             )
             
@@ -828,7 +879,9 @@ Second line: your in-character diplomatic message text (pure roleplay, no meta-c
                     self.bridge.chat_send(channel_id, self.player_id, self.country_name, message_text)
                     self.msg_count += 1
                     short = message_text[:80].replace("\n", " ")
-                    print(f"  💬 {self.country_name} (init in {channel_id}): \"{short}...\"", flush=True)
+                    ch_name_lookup = {ch["id"]: ch.get("name", ch["id"]) for ch in channels}
+                    ch_display = ch_name_lookup.get(channel_id, channel_id)
+                    print(f"  💬 {self.country_name} [{ch_display}]: \"{short}...\"", flush=True)
                 except Exception as e:
                     print(f"  ⚠ {self.country_name} send err: {e}", flush=True)
 
@@ -1357,7 +1410,79 @@ class Orchestrator:
                     continue
                 
                 orders = agent.generate_orders()
-                # generate_orders() always returns a valid list (HOLD fallback built-in)
+                
+                # ── Audit for self-conflicts (same agent, same destination) ──
+                conflict = Orchestrator._audit_agent_orders(orders)
+                if conflict:
+                    c_units = conflict["conflicting_unit_ids"]
+                    c_dest = conflict["destination"]
+                    print(f"  ⚠ {agent.country_name}: CONFLICT — {c_units} both → {c_dest}", flush=True)
+                    print(f"  ↻ Retrying with conflict info...", flush=True)
+
+                    conflict_msg = (
+                        f"⚠️ ORDER CONFLICT DETECTED ⚠️\n"
+                        f"The following units both tried to MOVE to {c_dest}:\n"
+                    )
+                    for uid in c_units:
+                        u = units.get(uid, {})
+                        conflict_msg += f"  • {uid} at {u.get('locationId', '?')} ({u.get('type', '?')})\n"
+                    conflict_msg += (
+                        f"\nOnly ONE unit can move to a province per turn. "
+                        f"One of these units must MOVE somewhere else or HOLD. "
+                        f"Please re-submit orders for these units."
+                    )
+
+                    from agent_tools import AgentTools as AgentToolsRetry
+                    retry_tools = AgentToolsRetry(pid, agent.bridge)
+                    state_text = agent._get_state_text()
+                    retry_prompt = f"""{state_text}
+
+{conflict_msg}
+
+Use the tools to fix your orders. Only re-submit orders for the conflicting units
+(use cancel_order if needed). When all units have valid orders, call finalize_orders."""
+
+                    agent.llm.chat_with_tools(
+                        model=agent.model,
+                        messages=[{"role": "user", "content": retry_prompt}],
+                        tools=AgentToolsRetry.definitions(),
+                        tool_handler=retry_tools.dispatch,
+                        system=agent.system_prompt,
+                        temperature=0.3,
+                        max_tokens=1000,
+                        max_turns=10,
+                        fallback_model=agent.fallback_model,
+                    )
+                    retry_orders = retry_tools.get_orders()
+                    
+                    if retry_orders:
+                        retry_map = {o["unitId"]: o for o in retry_orders}
+                        merged = []
+                        for o in orders:
+                            if o.get("unitId") in retry_map:
+                                merged.append(retry_map.pop(o["unitId"]))
+                            elif o.get("unitId") in c_units:
+                                # Conflicting unit not in retry → HOLD fallback
+                                merged.append({"unitId": o["unitId"], "type": "HOLD"})
+                            else:
+                                merged.append(o)
+                        merged.extend(retry_map.values())
+                        orders = merged
+                        
+                        conflict2 = Orchestrator._audit_agent_orders(orders)
+                        if conflict2:
+                            c2_units = conflict2["conflicting_unit_ids"]
+                            print(f"  ⚠ {agent.country_name}: still conflicted → auto-fixing {c2_units[1]} to HOLD", flush=True)
+                            for i, o in enumerate(orders):
+                                if o.get("unitId") == c2_units[1]:
+                                    orders[i] = {"unitId": o["unitId"], "type": "HOLD"}
+                                    break
+                    else:
+                        print(f"  ⚠ {agent.country_name}: retry empty → auto-fixing to HOLD", flush=True)
+                        for i, o in enumerate(orders):
+                            if o.get("unitId") in c_units[1:]:
+                                orders[i] = {"unitId": o["unitId"], "type": "HOLD"}
+                
                 self.bridge.submit_orders(pid, orders)
                 # Build unit location lookup for readable display
                 unit_locs = {uid: u.get('locationId', '?') for uid, u in units.items()}
@@ -1379,9 +1504,36 @@ class Orchestrator:
                             print(f"      {uid} (at {loc}): SUPPORT {sup_u} {sup_ot}")
                     else:
                         print(f"      {uid} (at {loc}): {otype}")
+                
+                # Generate verbal reasoning
+                reasoning = agent.generate_order_reasoning(orders)
+                if reasoning:
+                    print(f"  🎯 {agent.country_name}: {reasoning}", flush=True)
             except Exception as e:
                 print(f"  ❌ {agent.country_name}: {e}", flush=True)
     
+    @staticmethod
+    def _audit_agent_orders(orders: list) -> dict:
+        """Check for same-power same-destination conflicts in an agent's orders.
+        
+        Returns {conflicting_unit_ids: [id1, id2, ...], destination: "XXX"}
+        or empty dict if no conflicts.
+        """
+        dest_map = {}  # destination -> list of orders
+        for o in orders:
+            if o.get("type") == "MOVE":
+                dest = o.get("targetLocationId")
+                if dest:
+                    dest_map.setdefault(dest, []).append(o)
+        
+        for dest, moves in dest_map.items():
+            if len(moves) >= 2:
+                return {
+                    "conflicting_unit_ids": [m["unitId"] for m in moves],
+                    "destination": dest,
+                }
+        return {}
+
     def _run_retreat_phase(self, state: dict):
         retreats = state.get("retreatsNeeded", [])
         if not retreats:
