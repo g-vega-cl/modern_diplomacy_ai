@@ -82,18 +82,23 @@ Your response must be ONLY the explanation text. No JSON, no reasoning tags."""
 
 **Step 2: Call `generate_order_reasoning` in `_run_order_phase`**
 
-After `orders = agent.generate_orders()` (line 1359) and before `self.bridge.submit_orders(pid, orders)` (line 1361), add:
+After `orders = agent.generate_orders()` and the conflict audit, generate reasoning,
+then feed it into the self-review loop BEFORE calling `self.bridge.submit_orders`:
 
 ```python
-                # Generate verbal reasoning before submitting
+                # --- Self-Review: show agent its intent BEFORE locking in orders ---
                 reasoning = agent.generate_order_reasoning(orders)
                 if reasoning:
-                    print(f"  🎯 {agent.country_name}: {reasoning}", flush=True)
+                    print(f"  🧠 {agent.country_name} intent: {reasoning}", flush=True)
+
+                orders = agent.self_review_orders(orders, reasoning)
+
+                self.bridge.submit_orders(pid, orders)
 ```
 
 **Verification:** Run the orchestrator for one turn and confirm:
-- After each agent's orders are generated, a 🎯 line appears with strategic reasoning
-- The reasoning is 1-2 sentences, in-character
+- After each agent generates orders, a 🧠 intent line appears
+- The agent self-reviews and may revise before orders are locked in
 - Orders still submit and resolve correctly
 
 ---
@@ -291,16 +296,20 @@ Use the tools to fix your orders. Only re-submit orders for the conflicting unit
                 self.bridge.submit_orders(pid, orders)
 ```
 
-**Step 3: Restore the reasoning print after the audit block**
+**Step 3: Restore the self-review logic after the audit block**
 
 After the audit/retry block and before `self.bridge.submit_orders`, insert the
-reasoning call from Task 2:
+self-review flow from Task 1:
 
 ```python
-                # Generate verbal reasoning
+                # --- Self-Review: show agent its intent BEFORE locking in orders ---
                 reasoning = agent.generate_order_reasoning(orders)
                 if reasoning:
-                    print(f"  🎯 {agent.country_name}: {reasoning}", flush=True)
+                    print(f"  🧠 {agent.country_name} intent: {reasoning}", flush=True)
+
+                orders = agent.self_review_orders(orders, reasoning)
+
+                self.bridge.submit_orders(pid, orders)
 ```
 
 **Verification:** Run the orchestrator and:
@@ -331,7 +340,7 @@ python3 ai-orchestrator/orchestrator.py
 
 - [ ] Placement phase shows placement choices normally
 - [ ] Negotiation messages show `[channel_name]` in terminal (Task 2)
-- [ ] After each agent generates orders, 🎯 reasoning appears (Task 1)
+- [ ] After each agent generates orders, 🧠 intent + self-review runs (Task 1)
 - [ ] If any agent has self-conflict, audit/retry fires (Task 3)
 - [ ] Resolution displays correctly
 - [ ] Board prints correctly after resolution
@@ -352,8 +361,9 @@ Expected: All previously-passing tests still pass.
 | File | What Changes | Lines Added |
 |------|-------------|-------------|
 | `orchestrator.py` | `generate_order_reasoning()` method | ~45 |
+| `orchestrator.py` | `self_review_orders()` method | ~80 |
 | `orchestrator.py` | Enhanced terminal prints (channel names) | ~8 |
 | `orchestrator.py` | `_audit_agent_orders()` static method | ~20 |
-| `orchestrator.py` | Audit + retry logic in `_run_order_phase` | ~60 |
+| `orchestrator.py` | Audit + self-review logic in `_run_order_phase` | ~75 |
 
-**Total:** ~133 lines added, zero lines removed. All changes are additive.
+**Total:** ~228 lines added, zero lines removed.

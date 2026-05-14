@@ -559,6 +559,86 @@ Your response must be ONLY the explanation text. No JSON, no reasoning tags."""
             return response.strip()
         return ""
 
+    def self_review_orders(self, orders: list, reasoning: str) -> list:
+        """Let the agent review its own orders and reasoning before submission.
+
+        Feeds the agent its orders + stated intent, then asks it to spot
+        contradictions or missed opportunities. The agent can revise orders
+        via tools or confirm by calling finalize_orders without changes.
+
+        Returns potentially revised orders (or originals if confirmed).
+        """
+        if not orders:
+            return orders
+
+        from agent_tools import AgentTools
+
+        tools = AgentTools(self.player_id, self.bridge)
+        state_text = self._get_state_text()
+
+        # Format the orders and reasoning for the agent to review
+        state = self.bridge.get_state()
+        units = state.get("units", {})
+        order_lines = []
+        for o in orders:
+            uid = o.get("unitId", "?")
+            otype = o.get("type", "?")
+            unit = units.get(uid, {})
+            loc = unit.get("locationId", "?")
+            if otype == "MOVE":
+                tgt = o.get("targetLocationId", "?")
+                order_lines.append(f"  {uid} at {loc}: MOVE → {tgt}")
+            elif otype == "SUPPORT":
+                sup_u = o.get("supportUnitId", "?")
+                sup_ot = o.get("supportOrderType", "?")
+                sup_tgt = o.get("supportTargetLocationId", "")
+                if sup_ot == "MOVE" and sup_tgt:
+                    order_lines.append(f"  {uid} at {loc}: SUPPORT {sup_u} MOVE → {sup_tgt}")
+                else:
+                    order_lines.append(f"  {uid} at {loc}: SUPPORT {sup_u} {sup_ot}")
+            else:
+                order_lines.append(f"  {uid} at {loc}: {otype}")
+
+        review_prompt = f"""{state_text}
+
+SELF-REVIEW — Orders about to be submitted:
+
+{chr(10).join(order_lines)}
+
+YOUR STATED INTENT (what you said you're trying to accomplish):
+{reasoning}
+
+DOUBLE-CHECK:
+- Do your orders actually match your stated intent?
+- Are you supporting an ally while simultaneously attacking them?
+- Are any moves obviously suicidal or wasteful?
+- Did you forget to use a unit that should be doing something?
+
+You may REVISE your orders using the tools (cancel_order + submit_order).
+If you're satisfied, call finalize_orders to confirm.
+
+Be honest — this is private self-reflection. Better to catch mistakes now."""
+
+        self.llm.chat_with_tools(
+            model=self.model,
+            messages=[{"role": "user", "content": review_prompt}],
+            tools=AgentTools.definitions(),
+            tool_handler=tools.dispatch,
+            system=self.system_prompt,
+            temperature=0.3,
+            max_tokens=1000,
+            max_turns=10,
+            fallback_model=self.fallback_model,
+        )
+
+        revised = tools.get_orders()
+        if revised:
+            return revised
+        # If the agent called finalize with no changes, tools.get_orders()
+        # returns whatever was submitted — that's our original orders.
+        # If nothing at all, keep originals as fallback.
+        return orders
+
     def generate_placements(self) -> list:
         """Ask the LLM to choose where to place its initial units.
         Retries once with stronger formatting instructions on parse failure."""
@@ -1483,6 +1563,13 @@ Use the tools to fix your orders. Only re-submit orders for the conflicting unit
                             if o.get("unitId") in c_units[1:]:
                                 orders[i] = {"unitId": o["unitId"], "type": "HOLD"}
                 
+                # --- Self-Review: show agent its intent BEFORE locking in orders ---
+                reasoning = agent.generate_order_reasoning(orders)
+                if reasoning:
+                    print(f"  🧠 {agent.country_name} intent: {reasoning}", flush=True)
+
+                orders = agent.self_review_orders(orders, reasoning)
+
                 self.bridge.submit_orders(pid, orders)
                 # Build unit location lookup for readable display
                 unit_locs = {uid: u.get('locationId', '?') for uid, u in units.items()}
@@ -1504,11 +1591,6 @@ Use the tools to fix your orders. Only re-submit orders for the conflicting unit
                             print(f"      {uid} (at {loc}): SUPPORT {sup_u} {sup_ot}")
                     else:
                         print(f"      {uid} (at {loc}): {otype}")
-                
-                # Generate verbal reasoning
-                reasoning = agent.generate_order_reasoning(orders)
-                if reasoning:
-                    print(f"  🎯 {agent.country_name}: {reasoning}", flush=True)
             except Exception as e:
                 print(f"  ❌ {agent.country_name}: {e}", flush=True)
     

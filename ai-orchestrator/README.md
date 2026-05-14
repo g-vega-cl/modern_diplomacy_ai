@@ -135,10 +135,14 @@ The `engine-bridge.ts` is a JSON-line subprocess. Each command is a JSON object 
 │       via fresh tool loop (max 10 turns)            │
 │     → If still conflicted: auto-fix second unit to   │
 │       HOLD so both don't bounce uselessly           │
-│  4b. Verbal reasoning:                               │
-│     → Each agent explains its strategic intent for   │
-│       this turn in 1-2 sentences (🎯 output)        │
-│  5. All orders submitted simultaneously to engine    │
+│  4b. Self-review & intent check (BEFORE submission):  │
+│     → Agent verbalizes its strategic intent in 1-2    │
+│       sentences (🧠 output)                           │
+│     → That intent is fed back to the agent along with │
+│       its orders — it can spot contradictions and     │
+│       revise via tools before locking in (double-     │
+│       think self-review loop, max 10 turns)           │
+│  5. All final orders submitted simultaneously to engine│
 │  6. Engine resolves (supports, combat, standoffs)   │
 │     → RESOLUTION is an internal phase; the bridge   │
 │       auto-advances to RETREAT/BUILD/next ORDER     │
