@@ -1068,6 +1068,133 @@ class TestEngineBridgeThreadSafety(unittest.TestCase):
             f"bridge _call() is NOT thread-safe")
 
 
+class TestReasoningLogThreadSafety(unittest.TestCase):
+    """Verify that DiplomacyAgent._log_reasoning() produces
+    uncorrupted output under concurrent writes from multiple threads.
+    Without a lock, appends to the same file interleave and produce
+    malformed lines (missing timestamp, truncated country, fragments).
+    """
+
+    def setUp(self):
+        DiplomacyAgent._reasoning_log_path = None
+
+    def tearDown(self):
+        DiplomacyAgent._reasoning_log_path = None
+
+    def _parse_valid_line(self, line: str):
+        """Return (timestamp, country, reasoning) if line is well-formed,
+        or (None, None, None) if corrupted."""
+        import re
+        m = re.match(r'^\[(\d{2}:\d{2}:\d{2})\] ([A-Z][a-z]+): (.+)$', line)
+        if m:
+            return m.group(1), m.group(2), m.group(3)
+        return None, None, None
+
+    def test_concurrent_reasoning_logging_is_uncorrupted(self):
+        """THREAD-SAFETY TEST: Mock open() to inject a 2ms delay inside
+        write(), simulating the I/O window where the GIL is released.
+        Without a lock, concurrent writes interleave → corrupted lines.
+        With a lock, all lines stay well-formed."""
+        import threading
+        import time
+        from unittest import mock
+
+        countries = ["England", "France", "Germany", "Italy", "Austria",
+                     "Russia", "Turkey"]
+        texts = [
+            f"S{i:04d} " + "x" * 100
+            for i in range(200)
+        ]
+
+        # Real file we'll write to
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "test_reasoning.log")
+
+            # Write header (same as init_reasoning_log)
+            with open(log_path, "w") as f:
+                f.write("# AGENT REASONING LOG — test\n")
+                f.write("# Format: [timestamp] Country: reasoning text\n\n")
+
+            DiplomacyAgent._reasoning_log_path = log_path
+
+            # Mock open() to inject a small delay INSIDE write()
+            # This simulates the I/O window where GIL is released,
+            # guaranteeing that without a lock, writes interleave.
+            _real_open = open
+
+            class _DelayingFile:
+                """Wraps a real file handle. Splits each write() into two
+                halves with a 50ms sleep + flush between them, forcing
+                OS-level interleaving. Without a lock, two threads writing
+                concurrently will interleave in the middle of lines."""
+                def __init__(self, real_fh):
+                    self._fh = real_fh
+
+                def write(self, data):
+                    mid = len(data) // 2
+                    if mid == 0:
+                        return self._fh.write(data)
+                    r1 = self._fh.write(data[:mid])
+                    self._fh.flush()  # force OS write
+                    time.sleep(0.05)  # 50ms window for interleaving
+                    r2 = self._fh.write(data[mid:])
+                    self._fh.flush()
+                    return (r1 or 0) + (r2 or 0)
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    self._fh.__exit__(*args)
+
+            def _mock_open(*args, **kwargs):
+                fh = _real_open(*args, **kwargs)
+                if args and args[0] == log_path:
+                    return _DelayingFile(fh)
+                return fh
+
+            errors = []
+            barrier = threading.Barrier(7)
+
+            def worker(country):
+                try:
+                    barrier.wait()
+                    for t in texts:
+                        DiplomacyAgent._log_reasoning(country, t)
+                except Exception as e:
+                    errors.append(str(e))
+
+            with mock.patch("builtins.open", _mock_open):
+                threads = [threading.Thread(target=worker, args=(c,))
+                           for c in countries]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join(timeout=90)
+
+            self.assertEqual(len(errors), 0,
+                             f"Errors during concurrent logging: {errors}")
+
+            with open(log_path) as f:
+                lines = f.readlines()
+
+            corrupted = []
+            for lineno, line in enumerate(lines, 1):
+                stripped = line.rstrip('\n')
+                if stripped == '' or stripped.startswith('#'):
+                    continue
+                ts, country, reasoning = self._parse_valid_line(stripped)
+                if ts is None:
+                    corrupted.append(
+                        f"  L{lineno}: {stripped[:120]}")
+
+            self.assertEqual(
+                len(corrupted), 0,
+                f"Detected {len(corrupted)} corrupted lines — "
+                f"_log_reasoning is NOT thread-safe:\n"
+                + "\n".join(corrupted))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
@@ -1194,6 +1321,135 @@ class TestAPILogging(unittest.TestCase):
         # Should not raise
         LLMClient._log_request("test/model", {"messages": []})
         LLMClient._log_response("test/model", "test")
+
+
+class TestAPILoggingThreadSafety(unittest.TestCase):
+    """Verify that LLMClient._log_request() and _log_response() produce
+    uncorrupted output under concurrent writes from multiple threads.
+    Without a lock, appends to the same file interleave and produce
+    malformed lines (interleaved blocks, truncated timestamps, fragments).
+    """
+
+    def setUp(self):
+        LLMClient._api_log_path = None
+
+    def tearDown(self):
+        LLMClient._api_log_path = None
+
+    def _line_is_valid(self, line: str) -> bool:
+        """A valid line is either a block header [timestamp] REQUEST/RESPONSE ...
+        or a continuation line starting with '  ['."""
+        import re
+        stripped = line.rstrip('\n')
+        if stripped == '' or stripped.startswith('#'):
+            return True
+        # Block header: [HH:MM:SS.mmm] REQUEST ... or [HH:MM:SS.mmm] RESPONSE ...
+        if re.match(r'^\[\d{2}:\d{2}:\d{2}\.\d{3}\] (REQUEST|RESPONSE) ', stripped):
+            return True
+        # Continuation line: "  [role]" or "  [tool_call]" etc.
+        if re.match(r'^  \[', stripped):
+            return True
+        return False
+
+    def test_concurrent_api_logging_is_uncorrupted(self):
+        """50 calls × 7 threads calling _log_request + _log_response.
+        Mock open() with split-write delay to force interleaving.
+        After the fix, every line must be a valid block header or continuation.
+        Before the fix (RED), interleaved writes produce fragments."""
+        import threading
+        import time
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "test_api.log")
+
+            with open(log_path, "w") as f:
+                f.write("# API DEBUG LOG — test\n")
+                f.write("# Format: [timestamp] REQUEST/RESPONSE blocks\n\n")
+
+            LLMClient._api_log_path = log_path
+
+            _real_open = open
+
+            class _DelayingFile:
+                """Split each write() with flush+sleep to force OS interleaving."""
+                def __init__(self, real_fh):
+                    self._fh = real_fh
+
+                def write(self, data):
+                    mid = len(data) // 2
+                    if mid == 0:
+                        return self._fh.write(data)
+                    r1 = self._fh.write(data[:mid])
+                    self._fh.flush()
+                    time.sleep(0.05)
+                    r2 = self._fh.write(data[mid:])
+                    self._fh.flush()
+                    return (r1 or 0) + (r2 or 0)
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    self._fh.__exit__(*args)
+
+            def _mock_open(*args, **kwargs):
+                fh = _real_open(*args, **kwargs)
+                if args and args[0] == log_path:
+                    return _DelayingFile(fh)
+                return fh
+
+            errors = []
+            barrier = threading.Barrier(7)
+
+            def worker(idx):
+                try:
+                    barrier.wait()
+                    for i in range(50):
+                        payload = {
+                            "model": f"test/model-{idx}",
+                            "messages": [
+                                {"role": "user",
+                                 "content": f"Thread {idx} message {i}: " + "X" * 100}
+                            ],
+                            "temperature": 0.5,
+                            "max_tokens": 200,
+                        }
+                        LLMClient._log_request(f"test/model-{idx}", payload)
+                        LLMClient._log_response(
+                            f"test/model-{idx}",
+                            f"Response {i} from thread {idx}: " + "Y" * 80,
+                            finish_reason="stop",
+                            usage={"total_tokens": 500 + i},
+                        )
+                except Exception as e:
+                    errors.append(str(e))
+
+            with mock.patch("builtins.open", _mock_open):
+                threads = [threading.Thread(target=worker, args=(i,))
+                           for i in range(7)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join(timeout=120)
+
+            self.assertEqual(len(errors), 0,
+                             f"Errors during concurrent logging: {errors}")
+
+            with open(log_path) as f:
+                lines = f.readlines()
+
+            corrupted = []
+            for lineno, line in enumerate(lines, 1):
+                if not self._line_is_valid(line):
+                    corrupted.append(
+                        f"  L{lineno}: {line.rstrip()[:120]}")
+
+            self.assertEqual(
+                len(corrupted), 0,
+                f"Detected {len(corrupted)} corrupted lines — "
+                f"API logging is NOT thread-safe:\n"
+                + "\n".join(corrupted))
 
 
 class TestSummaryTurnHistoryCap(unittest.TestCase):

@@ -43,6 +43,7 @@ class LLMClient:
     
     # ── API request/response logging ───────────────────────────────
     _api_log_path: str = None
+    _api_log_lock = threading.Lock()
     
     @classmethod
     def init_api_log(cls, log_dir: str = None):
@@ -64,25 +65,26 @@ class LLMClient:
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         try:
-            with open(LLMClient._api_log_path, "a") as f:
-                f.write(f"[{ts}] REQUEST model={model} temp={payload.get('temperature')} max_tokens={payload.get('max_tokens')}\n")
-                msgs = payload.get("messages", [])
-                for m in msgs:
-                    role = m.get("role", "?")
-                    content = m.get("content", "")
-                    if isinstance(content, str) and len(content) > 500:
-                        content = content[:500] + f"... [{len(content)} chars]"
-                    tc = m.get("tool_calls")
-                    tool_id = m.get("tool_call_id")
-                    if tc:
-                        f.write(f"  [{role}] tool_calls: {json.dumps(tc)[:300]}\n")
-                    elif tool_id:
-                        f.write(f"  [tool:{tool_id}] {content[:200]}\n")
-                    else:
-                        f.write(f"  [{role}] {content}\n")
-                if payload.get("tools"):
-                    f.write(f"  [tools] {json.dumps([t['function']['name'] for t in payload['tools']])}\n")
-                f.write("\n")
+            with LLMClient._api_log_lock:
+                with open(LLMClient._api_log_path, "a") as f:
+                    f.write(f"[{ts}] REQUEST model={model} temp={payload.get('temperature')} max_tokens={payload.get('max_tokens')}\n")
+                    msgs = payload.get("messages", [])
+                    for m in msgs:
+                        role = m.get("role", "?")
+                        content = m.get("content", "")
+                        if isinstance(content, str) and len(content) > 500:
+                            content = content[:500] + f"... [{len(content)} chars]"
+                        tc = m.get("tool_calls")
+                        tool_id = m.get("tool_call_id")
+                        if tc:
+                            f.write(f"  [{role}] tool_calls: {json.dumps(tc)[:300]}\n")
+                        elif tool_id:
+                            f.write(f"  [tool:{tool_id}] {content[:200]}\n")
+                        else:
+                            f.write(f"  [{role}] {content}\n")
+                    if payload.get("tools"):
+                        f.write(f"  [tools] {json.dumps([t['function']['name'] for t in payload['tools']])}\n")
+                    f.write("\n")
         except Exception:
             pass
     
@@ -95,22 +97,23 @@ class LLMClient:
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         try:
-            with open(LLMClient._api_log_path, "a") as f:
-                if error:
-                    f.write(f"[{ts}] RESPONSE model={model} ERROR: {error}\n")
-                else:
-                    f.write(f"[{ts}] RESPONSE model={model} finish={finish_reason or 'stop'}")
-                    if usage:
-                        f.write(f" tokens={usage.get('total_tokens', '?')}")
+            with LLMClient._api_log_lock:
+                with open(LLMClient._api_log_path, "a") as f:
+                    if error:
+                        f.write(f"[{ts}] RESPONSE model={model} ERROR: {error}\n")
+                    else:
+                        f.write(f"[{ts}] RESPONSE model={model} finish={finish_reason or 'stop'}")
+                        if usage:
+                            f.write(f" tokens={usage.get('total_tokens', '?')}")
+                        f.write("\n")
+                        if tool_calls:
+                            for tc in tool_calls:
+                                fn = tc.get("function", {})
+                                f.write(f"  [tool_call] {fn.get('name')}({fn.get('arguments', '')[:200]})\n")
+                        if response_text:
+                            text = response_text if len(response_text) <= 1000 else response_text[:1000] + f"... [{len(response_text)} chars]"
+                            f.write(f"  [content] {text}\n")
                     f.write("\n")
-                    if tool_calls:
-                        for tc in tool_calls:
-                            fn = tc.get("function", {})
-                            f.write(f"  [tool_call] {fn.get('name')}({fn.get('arguments', '')[:200]})\n")
-                    if response_text:
-                        text = response_text if len(response_text) <= 1000 else response_text[:1000] + f"... [{len(response_text)} chars]"
-                        f.write(f"  [content] {text}\n")
-                f.write("\n")
         except Exception:
             pass
     # ── End logging setup ──────────────────────────────────────────
@@ -869,6 +872,7 @@ Second line: your in-character diplomatic message text (pure roleplay, no meta-c
 
     # Class-level reasoning log file handle (shared across all agents)
     _reasoning_log_path = None
+    _reasoning_log_lock = threading.Lock()
 
     @classmethod
     def init_reasoning_log(cls, log_dir: str = None):
@@ -895,8 +899,9 @@ Second line: your in-character diplomatic message text (pure roleplay, no meta-c
         # File output
         if DiplomacyAgent._reasoning_log_path:
             try:
-                with open(DiplomacyAgent._reasoning_log_path, "a") as f:
-                    f.write(f"[{ts}] {country_name}: {reasoning}\n\n")
+                with DiplomacyAgent._reasoning_log_lock:
+                    with open(DiplomacyAgent._reasoning_log_path, "a") as f:
+                        f.write(f"[{ts}] {country_name}: {reasoning}\n\n")
             except Exception:
                 pass
 
