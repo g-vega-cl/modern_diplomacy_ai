@@ -22,17 +22,20 @@ global_instructions: |
   - Multi-coast provinces (Spain, St. Petersburg, Bulgaria) require specifying the coast for fleet moves (e.g., SPA_NC, SPA_SC).
   - You must issue ONE order per unit you control.
 
+  ORDER OPTIONS FOR EACH UNIT:
+  - MOVE: to an adjacent territory.
+  - HOLD: stay in place (always valid, even if no moves are possible).
+  - SUPPORT: help another unit's MOVE or HOLD (must be adjacent to the target territory).
+
   NEGOTIATION:
   - You can chat with other players in the global channel or create private group chats.
   - Use negotiation to form alliances, coordinate attacks, and deceive opponents.
   - Be strategic: promises made in chat are NOT binding. You can lie.
-  - When the negotiation window closes, you must submit your orders.
 
-  ORDERS:
-  - You will be given your current units, their valid moves, and the visible board state.
-  - Submit orders as JSON: [{"unitId": "A_PAR_0_france", "type": "MOVE", "targetLocationId": "BUR"}, ...]
-  - Order types: MOVE, HOLD, SUPPORT
-  - For SUPPORT: include supportUnitId (the unit being supported), supportOrderType (MOVE or HOLD), and supportTargetLocationId if supporting a move.
+  HOW TO ACT:
+  - You will be given your current units and the visible board state.
+  - Use the available TOOLS to explore your options and submit your orders or builds.
+  - Always call 'finalize_orders' or 'finalize_builds' when you are done.
 
 agents:
   england:

@@ -446,13 +446,6 @@ class DiplomacyAgent:
                 moves_str = ", ".join(moves[:8]) if moves else "none (HOLD only)"
                 parts.append(f"  {uid} at {u.get('locationId', '?')} ({u.get('type', '?')}) → moves: {moves_str}")
         
-        # Always remind agents that HOLD and SUPPORT are valid
-        parts.append("")
-        parts.append("ORDER OPTIONS FOR EACH UNIT:")
-        parts.append("  • MOVE to an adjacent territory (listed above)")
-        parts.append("  • HOLD — always valid, even if no moves listed")
-        parts.append("  • SUPPORT — if adjacent to a friendly unit, you can support its MOVE or HOLD")
-        
         parts.append("")
         parts.append("=== ALL VISIBLE UNITS ===")
         for u in visible_units:
@@ -470,11 +463,11 @@ class DiplomacyAgent:
 
         state_text = self._get_state_text()
 
-        initial_prompt = f"""{state_text}
-
         summary_block = ""
         if self.current_summary_text:
-            summary_block = f"\n\nYOUR STRATEGIC MEMORY (summary of all prior turns):\n{self.current_summary_text}\n"
+            summary_block = f"YOUR STRATEGIC MEMORY (summary of all prior turns):\n{self.current_summary_text}\n\n"
+
+        initial_prompt = f"""{summary_block}{state_text}
 
 Negotiation is over. Use the available tools to explore the board and submit your orders.
 For each of your units, call get_my_units to see them, get_valid_moves to see where each
@@ -711,6 +704,10 @@ Respond with JSON array only."""
 
         state_text = self._get_state_text()
 
+        summary_block = ""
+        if self.current_summary_text:
+            summary_block = f"YOUR STRATEGIC MEMORY (summary of all prior turns):\n{self.current_summary_text}\n\n"
+
         if delta > 0:
             action_desc = f"You are the {self.country_name}. Build EXACTLY {delta} new unit(s)."
             action_verb = "CREATE"
@@ -718,7 +715,7 @@ Respond with JSON array only."""
             action_desc = f"You are the {self.country_name}. Disband EXACTLY {abs(delta)} unit(s)."
             action_verb = "DESTROY"
 
-        initial_prompt = f"""{state_text}
+        initial_prompt = f"""{summary_block}{state_text}
 
 {action_desc}
 Available build locations: {', '.join(valid_builds) if valid_builds else 'none available'}
