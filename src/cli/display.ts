@@ -1,4 +1,4 @@
-import { GameState, Player, Unit, ResolutionResult, Placement } from "../engine/types";
+import { GameState, Player, Unit, ResolutionResult, Placement } from "../features/engine/types";
 
 const SEP = "═".repeat(56);
 const BAR = "─".repeat(56);

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import type { User } from '~/utils/users'
+import { fetchUserById } from '~/features/users/server/user-service'
 
 export const Route = createFileRoute('/api/users/$userId')({
   server: {
@@ -7,20 +7,8 @@ export const Route = createFileRoute('/api/users/$userId')({
       GET: async ({ params, request }) => {
         console.info(`Fetching users by id=${params.userId}... @`, request.url)
         try {
-          const res = await fetch(
-            'https://jsonplaceholder.typicode.com/users/' + params.userId,
-          )
-          if (!res.ok) {
-            throw new Error('Failed to fetch user')
-          }
-
-          const user = (await res.json()) as User
-
-          return Response.json({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-          })
+          const user = await fetchUserById(params.userId)
+          return Response.json(user)
         } catch (e) {
           console.error(e)
           return Response.json({ error: 'User not found' }, { status: 404 })

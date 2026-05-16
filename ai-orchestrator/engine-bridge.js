@@ -34,11 +34,11 @@
  */
 
 const readline = require("readline");
-const { DiplomacyEngine } = require("../src/engine/engine");
-const { GameStateMachine } = require("../src/engine/state-machine");
-const { VictoryChecker } = require("../src/engine/victory");
-const { Phase } = require("../src/engine/types");
-const { PLAYERS, STARTING_UNITS } = require("../src/engine/config");
+const { DiplomacyEngine } = require("../src/features/engine/engine");
+const { GameStateMachine } = require("../src/features/engine/state-machine");
+const { VictoryChecker } = require("../src/features/engine/victory");
+const { Phase } = require("../src/features/engine/types");
+const { PLAYERS, STARTING_UNITS } = require("../src/features/engine/config");
 
 // Load chat manager for negotiation
 let chatManager;

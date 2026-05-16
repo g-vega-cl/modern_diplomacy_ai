@@ -3,7 +3,7 @@ import type { Message, ChatChannel } from './types'
 const MAX_HISTORY_PER_CHANNEL = 200
 const GLOBAL_CHANNEL_ID = 'global'
 
-class ChatManager {
+export class ChatManager {
   private channels = new Map<string, ChatChannel>()
   private messages = new Map<string, Message[]>()
 

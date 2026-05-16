@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getRequestHeaders } from '@tanstack/react-start/server'
 import { createMiddleware } from '@tanstack/react-start'
-import type { User } from '~/utils/users'
+import { fetchUsers } from '~/features/users/server/user-service'
 
 const userLoggerMiddleware = createMiddleware().server(async ({ next }) => {
   console.info('In: /users')
@@ -44,19 +44,8 @@ export const Route = createFileRoute('/api/users')({
     handlers: {
       GET: async ({ request }) => {
         console.info('GET /api/users @', request.url)
-        console.info('Fetching users... @', request.url)
-        const res = await fetch('https://jsonplaceholder.typicode.com/users')
-        if (!res.ok) {
-          throw new Error('Failed to fetch users')
-        }
-
-        const data = (await res.json()) as Array<User>
-
-        const list = data.slice(0, 10)
-
-        return Response.json(
-          list.map((u) => ({ id: u.id, name: u.name, email: u.email })),
-        )
+        const users = await fetchUsers()
+        return Response.json(users)
       },
     },
   },

@@ -194,6 +194,35 @@ describe('ChatManager', () => {
     })
   })
 
+  describe('getMessagesSince', () => {
+    it('returns only messages after the given timestamp', async () => {
+      const channel = chatManager.createGroup('Since', 'england', [])
+      chatManager.sendMessage(channel.id, 'england', 'England', 'Old')
+      
+      const middleTimestamp = Date.now()
+      // Ensure time moves forward
+      await new Promise(resolve => setTimeout(resolve, 5))
+      
+      chatManager.sendMessage(channel.id, 'england', 'England', 'New')
+      
+      const messages = chatManager.getMessagesSince(channel.id, middleTimestamp)
+      expect(messages.length).toBe(1)
+      expect(messages[0].content).toBe('New')
+    })
+
+    it('returns empty array if no messages since timestamp', () => {
+      const channel = chatManager.createGroup('SinceEmpty', 'england', [])
+      chatManager.sendMessage(channel.id, 'england', 'England', 'Past')
+      const messages = chatManager.getMessagesSince(channel.id, Date.now())
+      expect(messages).toEqual([])
+    })
+
+    it('returns empty array for non-existent channel', () => {
+      const messages = chatManager.getMessagesSince('nonexistent', 0)
+      expect(messages).toEqual([])
+    })
+  })
+
   describe('isPlayerInChannel', () => {
     it('returns true for any player in the global channel', () => {
       expect(chatManager.isPlayerInChannel('anyone', 'global')).toBe(true)

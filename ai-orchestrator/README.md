@@ -24,7 +24,7 @@ python3 -m unittest discover -s ai-orchestrator/__tests__ -p "test_*.py" -v  # 1
 
 # Individual suites
 pnpm vitest run ai-orchestrator/__tests__/engine-bridge.test.ts
-pnpm vitest run src/engine/__tests__/
+pnpm vitest run src/features/engine/__tests__/
 ```
 
 ## Architecture

@@ -7,90 +7,14 @@
  */
 
 import * as readline from "node:readline";
-import { DiplomacyEngine } from "../src/engine/engine";
-import { GameStateMachine } from "../src/engine/state-machine";
-import { VictoryChecker } from "../src/engine/victory";
-import { Phase, UnitType } from "../src/engine/types";
-import type { Order, BuildOrder, Placement, GameState, Unit } from "../src/engine/types";
-import { PLAYERS, STARTING_UNITS } from "../src/engine/config";
-
-// ─── In-memory chat manager ──────────────────────────────────────
-
-interface ChatChannel {
-  id: string;
-  name: string;
-  type: "global" | "group";
-  memberIds: string[];
-  createdBy?: string;
-}
-
-interface ChatMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  channelId: string;
-  timestamp: number;
-}
-
-class ChatManager {
-  private channels = new Map<string, ChatChannel>();
-  private messages = new Map<string, ChatMessage[]>();
-  private msgCounter = 0;
-
-  constructor() {
-    this.channels.set("global", {
-      id: "global", name: "Global Diplomacy", type: "global", memberIds: [],
-    });
-    this.messages.set("global", []);
-  }
-
-  getPlayerChannels(playerId: string): ChatChannel[] {
-    const result: ChatChannel[] = [];
-    for (const ch of this.channels.values()) {
-      if (ch.type === "global" || ch.memberIds.includes(playerId)) {
-        result.push(ch);
-      }
-    }
-    return result;
-  }
-
-  getMessagesSince(channelId: string, since: number): ChatMessage[] {
-    const msgs = this.messages.get(channelId) || [];
-    return msgs.filter(m => m.timestamp > since);
-  }
-
-  sendMessage(channelId: string, senderId: string, senderName: string, content: string): ChatMessage {
-    const msg: ChatMessage = {
-      id: `msg_${++this.msgCounter}`,
-      senderId, senderName, content, channelId,
-      timestamp: Date.now(),
-    };
-    let arr = this.messages.get(channelId);
-    if (!arr) { arr = []; this.messages.set(channelId, arr); }
-    arr.push(msg);
-    if (arr.length > 500) arr.splice(0, arr.length - 500);
-    return msg;
-  }
-
-  createGroup(name: string, createdBy: string, memberIds: string[]): ChatChannel {
-    const id = `group_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const ch: ChatChannel = { id, name, type: "group", memberIds: [createdBy, ...memberIds], createdBy };
-    this.channels.set(id, ch);
-    this.messages.set(id, []);
-    return ch;
-  }
-
-  reset(): void {
-    this.channels.clear();
-    this.messages.clear();
-    this.channels.set("global", {
-      id: "global", name: "Global Diplomacy", type: "global", memberIds: [],
-    });
-    this.messages.set("global", []);
-    this.msgCounter = 0;
-  }
-}
+import { DiplomacyEngine } from "../src/features/engine/engine";
+import { GameStateMachine } from "../src/features/engine/state-machine";
+import { VictoryChecker } from "../src/features/engine/victory";
+import { Phase, UnitType } from "../src/features/engine/types";
+import type { Order, BuildOrder, Placement, GameState, Unit } from "../src/features/engine/types";
+import { PLAYERS, STARTING_UNITS } from "../src/features/engine/config";
+import { ChatManager } from "../src/features/negotiation/chat-manager";
+import type { Message as ChatMessage, ChatChannel } from "../src/features/negotiation/types";
 
 // ─── Engine wrapper ──────────────────────────────────────────────
 

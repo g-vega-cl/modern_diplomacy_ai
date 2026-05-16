@@ -99,7 +99,7 @@ Phases: **PLACEMENT** (players choose unit types and starting positions on their
 ### Engine Architecture
 
 ```
-src/engine/
+src/features/engine/
   config.ts         — Game constants, starting positions, home SCs
   types.ts          — All enums (ProvinceType, UnitType, OrderType, Phase) + interfaces
   provinces.ts      — Full 75-territory classic Diplomacy map (81 entries inc. coast subs)
@@ -116,7 +116,7 @@ src/cli/
   display.ts        — Terminal rendering
   parser.ts         — Text order parser
 
-src/engine/__tests__/  — 80 tests across 7 files
+src/features/engine/__tests__/  — 80 tests across 7 files
 ```
 
 ### API Usage
@@ -270,23 +270,16 @@ src/features/negotiation/     ← All feature code (vertical module)
   types.ts                    — Message, ChatChannel types
   chat-manager.ts             — In-memory singleton: channels, messages, CRUD
   use-chat.ts                 — React hook (REST + polling)
-  chat-panel.tsx              — Channel sidebar + active chat
-  global-chat.tsx             — Global channel view
-  group-chat.tsx              — Group channel with invite/leave controls
-  create-group-dialog.tsx     — Modal for creating groups
-  negotiation-page.tsx        — Player selection → ChatPanel
-  index.ts                    — Barrel exports
+  ...
   __tests__/
     chat-manager.test.ts      — 32 tests
 
-server/api/chat/              ← REST API (LLM-friendly)
-  channels.get.ts
-  channels.post.ts
-  channels/[id]/invite.post.ts
-  channels/[id]/join.post.ts
-  channels/[id]/leave.post.ts
-  channels/[id]/messages.get.ts
-  channels/[id]/messages.post.ts
+src/routes/api/chat/          ← REST API (TanStack Start)
+  channels.ts
+  channels.$id.invite.ts
+  channels.$id.join.ts
+  channels.$id.leave.ts
+  channels.$id.messages.ts
 
 src/routes/
   negotiation.tsx             — Browser UI at /negotiation
@@ -296,21 +289,24 @@ src/routes/
 
 ```
 src/
-  engine/              — Diplomacy Light game engine (75 territories, full adjudication)
-  features/            — Vertical feature modules (negotiation, etc.)
-  cli/                 — Terminal interface (human players)
-  routes/              — TanStack Router routes
-  components/          — React components
-  utils/               — Shared utilities
+  features/
+    engine/          — Core game engine (75 territories, full adjudication)
+    game/            — Game session management (GameManager)
+    negotiation/     — Chat & diplomacy (ChatManager)
+    users/           — User data & services (UserService)
+  routes/
+    api/             — TanStack Start API routes (standardized)
+    ...              — UI routes
+  cli/               — Terminal interface (human players)
+  components/        — Generic UI components
+  utils/             — Generic shared utilities (logging, SEO, etc.)
 
 ai-orchestrator/
   orchestrator.py      — Main game loop, 7 AI agents, OpenRouter client, SummaryManager
-  summary_manager.py   — Cross-turn summary persistence (JSON I/O, validation, LLM generation)
-  agent_tools.py       — Tool definitions + validated dispatch for ORDER and BUILD phases
-  engine-bridge.ts     — Node.js subprocess wrapping the TypeScript engine
-  agents.json          — Country → OpenRouter model + persona configuration
-  summaries/           — Per-country JSON summaries (gitignored, wiped at game start)
-  __tests__/           — 17 bridge tests + 105 Python tests
+  summary_manager.py   — Cross-turn summary persistence
+  agent_tools.py       — Tool definitions + validated dispatch
+  engine-bridge.ts     — Node.js subprocess wrapping the engine
+  ...
 ```
 
 ```bash

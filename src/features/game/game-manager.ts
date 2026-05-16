@@ -1,9 +1,9 @@
-import { DiplomacyEngine } from "~/engine/engine";
-import { GameStateMachine } from "~/engine/state-machine";
-import { VictoryChecker } from "~/engine/victory";
-import type { GameState, Order, BuildOrder, Placement } from "~/engine/types";
-import { Phase } from "~/engine/types";
-import { PLAYERS, STARTING_UNITS } from "~/engine/config";
+import { DiplomacyEngine } from "~/features/engine/engine";
+import { GameStateMachine } from "~/features/engine/state-machine";
+import { VictoryChecker } from "~/features/engine/victory";
+import type { GameState, Order, BuildOrder, Placement } from "~/features/engine/types";
+import { Phase } from "~/features/engine/types";
+import { PLAYERS, STARTING_UNITS } from "~/features/engine/config";
 
 class GameManager {
   private engine = new DiplomacyEngine();

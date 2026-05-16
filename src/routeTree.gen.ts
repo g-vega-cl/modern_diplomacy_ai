@@ -25,8 +25,21 @@ import { Route as ApiUsersRouteImport } from './routes/api/users'
 import { Route as PathlessLayoutNestedLayoutRouteImport } from './routes/_pathlessLayout/_nested-layout'
 import { Route as PostsPostIdDeepRouteImport } from './routes/posts_.$postId.deep'
 import { Route as ApiUsersUserIdRouteImport } from './routes/api/users.$userId'
+import { Route as ApiGameStatusRouteImport } from './routes/api/game/status'
+import { Route as ApiGameStateRouteImport } from './routes/api/game/state'
+import { Route as ApiGameRetreatRouteImport } from './routes/api/game/retreat'
+import { Route as ApiGameResolveRouteImport } from './routes/api/game/resolve'
+import { Route as ApiGameResetRouteImport } from './routes/api/game/reset'
+import { Route as ApiGameOrdersRouteImport } from './routes/api/game/orders'
+import { Route as ApiGameBuildRouteImport } from './routes/api/game/build'
+import { Route as ApiChatChannelsRouteImport } from './routes/api/chat/channels'
 import { Route as PathlessLayoutNestedLayoutRouteBRouteImport } from './routes/_pathlessLayout/_nested-layout/route-b'
 import { Route as PathlessLayoutNestedLayoutRouteARouteImport } from './routes/_pathlessLayout/_nested-layout/route-a'
+import { Route as ApiGamePlayerPlayerIdRouteImport } from './routes/api/game/player.$playerId'
+import { Route as ApiChatChannelsIdMessagesRouteImport } from './routes/api/chat/channels.$id.messages'
+import { Route as ApiChatChannelsIdLeaveRouteImport } from './routes/api/chat/channels.$id.leave'
+import { Route as ApiChatChannelsIdJoinRouteImport } from './routes/api/chat/channels.$id.join'
+import { Route as ApiChatChannelsIdInviteRouteImport } from './routes/api/chat/channels.$id.invite'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -107,6 +120,46 @@ const ApiUsersUserIdRoute = ApiUsersUserIdRouteImport.update({
   path: '/$userId',
   getParentRoute: () => ApiUsersRoute,
 } as any)
+const ApiGameStatusRoute = ApiGameStatusRouteImport.update({
+  id: '/api/game/status',
+  path: '/api/game/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGameStateRoute = ApiGameStateRouteImport.update({
+  id: '/api/game/state',
+  path: '/api/game/state',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGameRetreatRoute = ApiGameRetreatRouteImport.update({
+  id: '/api/game/retreat',
+  path: '/api/game/retreat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGameResolveRoute = ApiGameResolveRouteImport.update({
+  id: '/api/game/resolve',
+  path: '/api/game/resolve',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGameResetRoute = ApiGameResetRouteImport.update({
+  id: '/api/game/reset',
+  path: '/api/game/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGameOrdersRoute = ApiGameOrdersRouteImport.update({
+  id: '/api/game/orders',
+  path: '/api/game/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGameBuildRoute = ApiGameBuildRouteImport.update({
+  id: '/api/game/build',
+  path: '/api/game/build',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatChannelsRoute = ApiChatChannelsRouteImport.update({
+  id: '/api/chat/channels',
+  path: '/api/chat/channels',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PathlessLayoutNestedLayoutRouteBRoute =
   PathlessLayoutNestedLayoutRouteBRouteImport.update({
     id: '/route-b',
@@ -119,6 +172,32 @@ const PathlessLayoutNestedLayoutRouteARoute =
     path: '/route-a',
     getParentRoute: () => PathlessLayoutNestedLayoutRoute,
   } as any)
+const ApiGamePlayerPlayerIdRoute = ApiGamePlayerPlayerIdRouteImport.update({
+  id: '/api/game/player/$playerId',
+  path: '/api/game/player/$playerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatChannelsIdMessagesRoute =
+  ApiChatChannelsIdMessagesRouteImport.update({
+    id: '/$id/messages',
+    path: '/$id/messages',
+    getParentRoute: () => ApiChatChannelsRoute,
+  } as any)
+const ApiChatChannelsIdLeaveRoute = ApiChatChannelsIdLeaveRouteImport.update({
+  id: '/$id/leave',
+  path: '/$id/leave',
+  getParentRoute: () => ApiChatChannelsRoute,
+} as any)
+const ApiChatChannelsIdJoinRoute = ApiChatChannelsIdJoinRouteImport.update({
+  id: '/$id/join',
+  path: '/$id/join',
+  getParentRoute: () => ApiChatChannelsRoute,
+} as any)
+const ApiChatChannelsIdInviteRoute = ApiChatChannelsIdInviteRouteImport.update({
+  id: '/$id/invite',
+  path: '/$id/invite',
+  getParentRoute: () => ApiChatChannelsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -135,8 +214,21 @@ export interface FileRoutesByFullPath {
   '/users/': typeof UsersIndexRoute
   '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
   '/route-b': typeof PathlessLayoutNestedLayoutRouteBRoute
+  '/api/chat/channels': typeof ApiChatChannelsRouteWithChildren
+  '/api/game/build': typeof ApiGameBuildRoute
+  '/api/game/orders': typeof ApiGameOrdersRoute
+  '/api/game/reset': typeof ApiGameResetRoute
+  '/api/game/resolve': typeof ApiGameResolveRoute
+  '/api/game/retreat': typeof ApiGameRetreatRoute
+  '/api/game/state': typeof ApiGameStateRoute
+  '/api/game/status': typeof ApiGameStatusRoute
   '/api/users/$userId': typeof ApiUsersUserIdRoute
   '/posts/$postId/deep': typeof PostsPostIdDeepRoute
+  '/api/game/player/$playerId': typeof ApiGamePlayerPlayerIdRoute
+  '/api/chat/channels/$id/invite': typeof ApiChatChannelsIdInviteRoute
+  '/api/chat/channels/$id/join': typeof ApiChatChannelsIdJoinRoute
+  '/api/chat/channels/$id/leave': typeof ApiChatChannelsIdLeaveRoute
+  '/api/chat/channels/$id/messages': typeof ApiChatChannelsIdMessagesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -151,8 +243,21 @@ export interface FileRoutesByTo {
   '/users': typeof UsersIndexRoute
   '/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
   '/route-b': typeof PathlessLayoutNestedLayoutRouteBRoute
+  '/api/chat/channels': typeof ApiChatChannelsRouteWithChildren
+  '/api/game/build': typeof ApiGameBuildRoute
+  '/api/game/orders': typeof ApiGameOrdersRoute
+  '/api/game/reset': typeof ApiGameResetRoute
+  '/api/game/resolve': typeof ApiGameResolveRoute
+  '/api/game/retreat': typeof ApiGameRetreatRoute
+  '/api/game/state': typeof ApiGameStateRoute
+  '/api/game/status': typeof ApiGameStatusRoute
   '/api/users/$userId': typeof ApiUsersUserIdRoute
   '/posts/$postId/deep': typeof PostsPostIdDeepRoute
+  '/api/game/player/$playerId': typeof ApiGamePlayerPlayerIdRoute
+  '/api/chat/channels/$id/invite': typeof ApiChatChannelsIdInviteRoute
+  '/api/chat/channels/$id/join': typeof ApiChatChannelsIdJoinRoute
+  '/api/chat/channels/$id/leave': typeof ApiChatChannelsIdLeaveRoute
+  '/api/chat/channels/$id/messages': typeof ApiChatChannelsIdMessagesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -172,8 +277,21 @@ export interface FileRoutesById {
   '/users/': typeof UsersIndexRoute
   '/_pathlessLayout/_nested-layout/route-a': typeof PathlessLayoutNestedLayoutRouteARoute
   '/_pathlessLayout/_nested-layout/route-b': typeof PathlessLayoutNestedLayoutRouteBRoute
+  '/api/chat/channels': typeof ApiChatChannelsRouteWithChildren
+  '/api/game/build': typeof ApiGameBuildRoute
+  '/api/game/orders': typeof ApiGameOrdersRoute
+  '/api/game/reset': typeof ApiGameResetRoute
+  '/api/game/resolve': typeof ApiGameResolveRoute
+  '/api/game/retreat': typeof ApiGameRetreatRoute
+  '/api/game/state': typeof ApiGameStateRoute
+  '/api/game/status': typeof ApiGameStatusRoute
   '/api/users/$userId': typeof ApiUsersUserIdRoute
   '/posts_/$postId/deep': typeof PostsPostIdDeepRoute
+  '/api/game/player/$playerId': typeof ApiGamePlayerPlayerIdRoute
+  '/api/chat/channels/$id/invite': typeof ApiChatChannelsIdInviteRoute
+  '/api/chat/channels/$id/join': typeof ApiChatChannelsIdJoinRoute
+  '/api/chat/channels/$id/leave': typeof ApiChatChannelsIdLeaveRoute
+  '/api/chat/channels/$id/messages': typeof ApiChatChannelsIdMessagesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -192,8 +310,21 @@ export interface FileRouteTypes {
     | '/users/'
     | '/route-a'
     | '/route-b'
+    | '/api/chat/channels'
+    | '/api/game/build'
+    | '/api/game/orders'
+    | '/api/game/reset'
+    | '/api/game/resolve'
+    | '/api/game/retreat'
+    | '/api/game/state'
+    | '/api/game/status'
     | '/api/users/$userId'
     | '/posts/$postId/deep'
+    | '/api/game/player/$playerId'
+    | '/api/chat/channels/$id/invite'
+    | '/api/chat/channels/$id/join'
+    | '/api/chat/channels/$id/leave'
+    | '/api/chat/channels/$id/messages'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -208,8 +339,21 @@ export interface FileRouteTypes {
     | '/users'
     | '/route-a'
     | '/route-b'
+    | '/api/chat/channels'
+    | '/api/game/build'
+    | '/api/game/orders'
+    | '/api/game/reset'
+    | '/api/game/resolve'
+    | '/api/game/retreat'
+    | '/api/game/state'
+    | '/api/game/status'
     | '/api/users/$userId'
     | '/posts/$postId/deep'
+    | '/api/game/player/$playerId'
+    | '/api/chat/channels/$id/invite'
+    | '/api/chat/channels/$id/join'
+    | '/api/chat/channels/$id/leave'
+    | '/api/chat/channels/$id/messages'
   id:
     | '__root__'
     | '/'
@@ -228,8 +372,21 @@ export interface FileRouteTypes {
     | '/users/'
     | '/_pathlessLayout/_nested-layout/route-a'
     | '/_pathlessLayout/_nested-layout/route-b'
+    | '/api/chat/channels'
+    | '/api/game/build'
+    | '/api/game/orders'
+    | '/api/game/reset'
+    | '/api/game/resolve'
+    | '/api/game/retreat'
+    | '/api/game/state'
+    | '/api/game/status'
     | '/api/users/$userId'
     | '/posts_/$postId/deep'
+    | '/api/game/player/$playerId'
+    | '/api/chat/channels/$id/invite'
+    | '/api/chat/channels/$id/join'
+    | '/api/chat/channels/$id/leave'
+    | '/api/chat/channels/$id/messages'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -242,7 +399,16 @@ export interface RootRouteChildren {
   RedirectRoute: typeof RedirectRoute
   UsersRoute: typeof UsersRouteWithChildren
   ApiUsersRoute: typeof ApiUsersRouteWithChildren
+  ApiChatChannelsRoute: typeof ApiChatChannelsRouteWithChildren
+  ApiGameBuildRoute: typeof ApiGameBuildRoute
+  ApiGameOrdersRoute: typeof ApiGameOrdersRoute
+  ApiGameResetRoute: typeof ApiGameResetRoute
+  ApiGameResolveRoute: typeof ApiGameResolveRoute
+  ApiGameRetreatRoute: typeof ApiGameRetreatRoute
+  ApiGameStateRoute: typeof ApiGameStateRoute
+  ApiGameStatusRoute: typeof ApiGameStatusRoute
   PostsPostIdDeepRoute: typeof PostsPostIdDeepRoute
+  ApiGamePlayerPlayerIdRoute: typeof ApiGamePlayerPlayerIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -359,6 +525,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUsersUserIdRouteImport
       parentRoute: typeof ApiUsersRoute
     }
+    '/api/game/status': {
+      id: '/api/game/status'
+      path: '/api/game/status'
+      fullPath: '/api/game/status'
+      preLoaderRoute: typeof ApiGameStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/game/state': {
+      id: '/api/game/state'
+      path: '/api/game/state'
+      fullPath: '/api/game/state'
+      preLoaderRoute: typeof ApiGameStateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/game/retreat': {
+      id: '/api/game/retreat'
+      path: '/api/game/retreat'
+      fullPath: '/api/game/retreat'
+      preLoaderRoute: typeof ApiGameRetreatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/game/resolve': {
+      id: '/api/game/resolve'
+      path: '/api/game/resolve'
+      fullPath: '/api/game/resolve'
+      preLoaderRoute: typeof ApiGameResolveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/game/reset': {
+      id: '/api/game/reset'
+      path: '/api/game/reset'
+      fullPath: '/api/game/reset'
+      preLoaderRoute: typeof ApiGameResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/game/orders': {
+      id: '/api/game/orders'
+      path: '/api/game/orders'
+      fullPath: '/api/game/orders'
+      preLoaderRoute: typeof ApiGameOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/game/build': {
+      id: '/api/game/build'
+      path: '/api/game/build'
+      fullPath: '/api/game/build'
+      preLoaderRoute: typeof ApiGameBuildRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat/channels': {
+      id: '/api/chat/channels'
+      path: '/api/chat/channels'
+      fullPath: '/api/chat/channels'
+      preLoaderRoute: typeof ApiChatChannelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_pathlessLayout/_nested-layout/route-b': {
       id: '/_pathlessLayout/_nested-layout/route-b'
       path: '/route-b'
@@ -372,6 +594,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/route-a'
       preLoaderRoute: typeof PathlessLayoutNestedLayoutRouteARouteImport
       parentRoute: typeof PathlessLayoutNestedLayoutRoute
+    }
+    '/api/game/player/$playerId': {
+      id: '/api/game/player/$playerId'
+      path: '/api/game/player/$playerId'
+      fullPath: '/api/game/player/$playerId'
+      preLoaderRoute: typeof ApiGamePlayerPlayerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat/channels/$id/messages': {
+      id: '/api/chat/channels/$id/messages'
+      path: '/$id/messages'
+      fullPath: '/api/chat/channels/$id/messages'
+      preLoaderRoute: typeof ApiChatChannelsIdMessagesRouteImport
+      parentRoute: typeof ApiChatChannelsRoute
+    }
+    '/api/chat/channels/$id/leave': {
+      id: '/api/chat/channels/$id/leave'
+      path: '/$id/leave'
+      fullPath: '/api/chat/channels/$id/leave'
+      preLoaderRoute: typeof ApiChatChannelsIdLeaveRouteImport
+      parentRoute: typeof ApiChatChannelsRoute
+    }
+    '/api/chat/channels/$id/join': {
+      id: '/api/chat/channels/$id/join'
+      path: '/$id/join'
+      fullPath: '/api/chat/channels/$id/join'
+      preLoaderRoute: typeof ApiChatChannelsIdJoinRouteImport
+      parentRoute: typeof ApiChatChannelsRoute
+    }
+    '/api/chat/channels/$id/invite': {
+      id: '/api/chat/channels/$id/invite'
+      path: '/$id/invite'
+      fullPath: '/api/chat/channels/$id/invite'
+      preLoaderRoute: typeof ApiChatChannelsIdInviteRouteImport
+      parentRoute: typeof ApiChatChannelsRoute
     }
   }
 }
@@ -442,6 +699,24 @@ const ApiUsersRouteWithChildren = ApiUsersRoute._addFileChildren(
   ApiUsersRouteChildren,
 )
 
+interface ApiChatChannelsRouteChildren {
+  ApiChatChannelsIdInviteRoute: typeof ApiChatChannelsIdInviteRoute
+  ApiChatChannelsIdJoinRoute: typeof ApiChatChannelsIdJoinRoute
+  ApiChatChannelsIdLeaveRoute: typeof ApiChatChannelsIdLeaveRoute
+  ApiChatChannelsIdMessagesRoute: typeof ApiChatChannelsIdMessagesRoute
+}
+
+const ApiChatChannelsRouteChildren: ApiChatChannelsRouteChildren = {
+  ApiChatChannelsIdInviteRoute: ApiChatChannelsIdInviteRoute,
+  ApiChatChannelsIdJoinRoute: ApiChatChannelsIdJoinRoute,
+  ApiChatChannelsIdLeaveRoute: ApiChatChannelsIdLeaveRoute,
+  ApiChatChannelsIdMessagesRoute: ApiChatChannelsIdMessagesRoute,
+}
+
+const ApiChatChannelsRouteWithChildren = ApiChatChannelsRoute._addFileChildren(
+  ApiChatChannelsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PathlessLayoutRoute: PathlessLayoutRouteWithChildren,
@@ -452,7 +727,16 @@ const rootRouteChildren: RootRouteChildren = {
   RedirectRoute: RedirectRoute,
   UsersRoute: UsersRouteWithChildren,
   ApiUsersRoute: ApiUsersRouteWithChildren,
+  ApiChatChannelsRoute: ApiChatChannelsRouteWithChildren,
+  ApiGameBuildRoute: ApiGameBuildRoute,
+  ApiGameOrdersRoute: ApiGameOrdersRoute,
+  ApiGameResetRoute: ApiGameResetRoute,
+  ApiGameResolveRoute: ApiGameResolveRoute,
+  ApiGameRetreatRoute: ApiGameRetreatRoute,
+  ApiGameStateRoute: ApiGameStateRoute,
+  ApiGameStatusRoute: ApiGameStatusRoute,
   PostsPostIdDeepRoute: PostsPostIdDeepRoute,
+  ApiGamePlayerPlayerIdRoute: ApiGamePlayerPlayerIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,10 +1,10 @@
 import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { DiplomacyEngine } from "../engine/engine";
-import { GameStateMachine } from "../engine/state-machine";
-import { VictoryChecker } from "../engine/victory";
-import { Phase, Order, UnitType, Placement } from "../engine/types";
-import { GAME_CONFIG, HOME_SCS } from "../engine/config";
+import { DiplomacyEngine } from "../features/engine/engine";
+import { GameStateMachine } from "../features/engine/state-machine";
+import { VictoryChecker } from "../features/engine/victory";
+import { Phase, Order, UnitType, Placement } from "../features/engine/types";
+import { GAME_CONFIG, HOME_SCS } from "../features/engine/config";
 import { parseOrder } from "./parser";
 import {
   showHeader, showSupplyCenters, showUnits, showPlayerOrdersPrompt,
